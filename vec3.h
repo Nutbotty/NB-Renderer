@@ -5,9 +5,7 @@
 #ifndef NB_RENDERER_VEC3_H
 #define NB_RENDERER_VEC3_H
 
-#include <cmath>
 #include <iosfwd>
-#include <iostream>
 
 class vec3 {
 public:
