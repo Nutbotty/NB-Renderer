@@ -98,7 +98,7 @@ private:
         if (world.hit(r, interval(0.001, infinity), rec)) {
             // vec3 direction = random_on_hemisphere(rec.normal); // non Lambert diffuse
             vec3 direction = rec.normal + random_unit_vector();   // Lambert diffuse
-            return 0.5 * ray_color(ray(rec.p, direction), depth - 1, world);
+            return 0.3 * ray_color(ray(rec.p, direction), depth - 1, world);
         }
 
         vec3 unit_direction = unit_vector(r.direction());
