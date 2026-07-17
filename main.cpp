@@ -23,6 +23,9 @@ int main() {
     world.add(make_shared<sphere>(point3( -1.0,    1.0, -1.4),   0.4, material_bubble_inside));
     world.add(make_shared<sphere>(point3(-1.5,    0.0, -1.8),   0.5, material_left));
     world.add(make_shared<sphere>(point3( 1.2,    0.0, -1.25),   0.5, material_right));
+    point3 center(0, 0 ,0);
+    auto center2 = center + vec3(0, random_double(.4,.7), 0);
+    world.add(make_shared<sphere>(center, center2, 0.2, material_center));
 
     // CAMERA
     camera cam;
@@ -37,7 +40,7 @@ int main() {
     cam.lookat   = point3(0,0,-1);
     cam.vup      = vec3(0,1,0);
 
-    cam.defocus_angle = 8.0;
+    cam.defocus_angle = 3.0;
     cam.focus_dist    = 2.575;
 
     cam.render(world);
