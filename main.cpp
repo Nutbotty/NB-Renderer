@@ -3,9 +3,13 @@
 #include "hittable.h"
 #include "hittable_list.h"
 #include "sphere.h"
+#include "glad/glad.h"
+#include <GLFW/glfw3.h>
+#include "OpenGLRenderer/openglviewport.h"
 
 int main() {
 
+    viewport();
     std::freopen("ImageOutputFiles/image.ppm", "w", stdout);
 
     // WORLD
