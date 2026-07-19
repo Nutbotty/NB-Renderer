@@ -9,6 +9,11 @@
 #include "material.h"
 #include "nbrenderer.h"
 
+#include <atomic>
+#include <thread>
+#include <vector>
+#include <sstream>
+
 class camera {
 public:
     double aspect_ratio = 1.0;
@@ -29,19 +34,62 @@ public:
     void render(const hittable& world) {
         initialize();
 
-        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+        // Each pixel gets its own string so threads never write to std::cout.
+        std::vector<std::string> framebuffer(image_width * image_height);
 
-        for (int j = 0; j < image_height; j++) {
-            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
-            for (int i = 0; i < image_width; i++) {
-                color pixel_color(0,0,0);
-                for (int sample = 0; sample < samples_per_pixel; sample++) {
-                    ray r = get_ray(i, j);
-                    pixel_color += ray_color(r, max_depth, world);
+        std::atomic<int> next_row{0};
+
+        unsigned int thread_count = std::thread::hardware_concurrency();
+        if (thread_count == 0)
+            thread_count = 4;
+
+        auto worker = [&]() {
+            while (true) {
+
+                int j = next_row.fetch_add(1);
+
+                if (j >= image_height)
+                    break;
+
+                std::clog << "\rScanlines remaining: "
+                          << (image_height - j)
+                          << ' '
+                          << std::flush;
+
+                for (int i = 0; i < image_width; i++) {
+
+                    color pixel_color(0,0,0);
+
+                    for (int sample = 0; sample < samples_per_pixel; sample++) {
+                        ray r = get_ray(i, j);
+                        pixel_color += ray_color(r, max_depth, world);
+                    }
+
+                    std::ostringstream out;
+                    write_color(out, pixel_samples_scale * pixel_color);
+
+                    framebuffer[j * image_width + i] = out.str();
                 }
-                write_color(std::cout, pixel_samples_scale * pixel_color);
             }
-        }
+        };
+
+        std::vector<std::thread> threads;
+
+        for (unsigned int i = 0; i < thread_count; i++)
+            threads.emplace_back(worker);
+
+        for (auto& t : threads)
+            t.join();
+
+        // Output image after rendering is complete.
+        std::cout << "P3\n"
+                  << image_width << ' '
+                  << image_height
+                  << "\n255\n";
+
+        for (int j = 0; j < image_height; j++)
+            for (int i = 0; i < image_width; i++)
+                std::cout << framebuffer[j * image_width + i];
 
         std::clog << "\rDone.                 \n";
     }
