@@ -5,6 +5,8 @@
 #ifndef NB_RENDERER_AABB_H
 #define NB_RENDERER_AABB_H
 #include "interval.h"
+#include "vec3.h"
+#include "ray.h"
 
 class aabb {
 public:
@@ -69,7 +71,7 @@ public:
     static const aabb empty, universe;
 };
 
-const aabb aabb::empty    = aabb(interval::empty,    interval::empty,    interval::empty);
-const aabb aabb::universe = aabb(interval::universe, interval::universe, interval::universe);
+inline const aabb aabb::empty    = aabb(interval::empty,    interval::empty,    interval::empty);
+inline const aabb aabb::universe = aabb(interval::universe, interval::universe, interval::universe);
 
 #endif //NB_RENDERER_AABB_H

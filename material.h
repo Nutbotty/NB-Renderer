@@ -6,6 +6,7 @@
 #define NB_RENDERER_MATERIAL_H
 
 #include "hittable.h"
+#include "color.h"
 
 class material {
     public:

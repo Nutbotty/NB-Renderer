@@ -6,6 +6,7 @@
 #define NB_RENDERER_HITTABLE_H
 
 #include "aabb.h"
+#include "ray.h"
 
 class material;
 
