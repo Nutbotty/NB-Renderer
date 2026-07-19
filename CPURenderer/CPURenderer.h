@@ -7,6 +7,7 @@
 
 #include "camera.h"
 
+
 class CPURenderer {
     public:
     CPURenderer () = default;
