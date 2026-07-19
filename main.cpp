@@ -9,7 +9,10 @@
 #include <GLFW/glfw3.h>
 #include "OpenGLRenderer/openglviewport.h"
 #include <chrono>
+
+#include "OpenGLRenderer/editorcamera.h"
 #include "Scene/scene.h"
+#include "OpenGLRenderer/editorcamera.h"
 
 int main() {
     std::freopen("ImageOutputFiles/image.ppm", "w", stdout);
@@ -66,22 +69,46 @@ int main() {
     world = hittable_list(make_shared<bvh_node>(world));
     // world = scene.GetObjects();
 
-    
-    viewport(scene);
+
+    EditorCamera editorCamera = viewport(scene);
     // CAMERA
     camera cam;
 
     cam.aspect_ratio = 16.0 / 9.0;
-    cam.image_width  = 1280;
-    cam.samples_per_pixel = 20;
+    cam.image_width  = 640;
+    cam.samples_per_pixel = 50;
     cam.max_depth = 8;
 
     cam.vfov     = 20;
-    cam.lookfrom = point3(13,2,3);
-    cam.lookat   = point3(0,0,0);
-    cam.vup      = vec3(0,1,0);
+    float focus = editorCamera.FocusDistance;
 
-    cam.defocus_angle = 0.6;
+    glm::vec3 target =
+        editorCamera.Position +
+        editorCamera.Front * focus;
+
+
+    cam.lookfrom = point3(
+        editorCamera.Position.x,
+        editorCamera.Position.y,
+        editorCamera.Position.z
+    );
+
+
+    cam.lookat = point3(
+        target.x,
+        target.y,
+        target.z
+    );
+
+    cam.vup = vec3(
+        editorCamera.Up.x,
+        editorCamera.Up.y,
+        editorCamera.Up.z
+    );
+
+    // cam.defocus_angle = editorCamera.DefocusAngle;
+    // cam.focus_dist = editorCamera.FocusDistance;
+    cam.defocus_angle = 4.0;
     cam.focus_dist    = 10.0;
 
     auto start = std::chrono::steady_clock::now();

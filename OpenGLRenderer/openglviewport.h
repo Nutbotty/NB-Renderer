@@ -8,8 +8,8 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include "../Scene/scene.h"
-#include "editor_camera.h"
+#include "editorcamera.h"
 
-EditorCameraState viewport(const Scene& scene);
+EditorCamera viewport(const Scene& scene);
 
 #endif //NB_RENDERER_OPENGLVIEWPORT_H

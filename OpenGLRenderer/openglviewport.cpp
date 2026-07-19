@@ -4,7 +4,7 @@
 #include "openglviewport.h"
 #include <iostream>
 #include "shader.h"
-#include "camera.h"
+#include "editorcamera.h"
 #include "../sphere.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -17,7 +17,14 @@ const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 
 // camera
-Camera camera(glm::vec3(0.0f, 0.0f, 3.0f));
+EditorCamera camera(
+    glm::vec3(13.0f, 2.0f, 3.0f),
+    glm::vec3(0,1,0),
+    -167.0f,
+    -5.0f,
+    10.0,
+    4.0
+);
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
@@ -26,7 +33,7 @@ bool firstMouse = true;
 float deltaTime = 0.0f;	// time between current frame and last frame
 float lastFrame = 0.0f;
 
-EditorCameraState viewport(const Scene& scene) {
+EditorCamera viewport(const Scene& scene) {
 // glfw: initialize and configure
     // ------------------------------
     glfwInit();
@@ -45,7 +52,8 @@ EditorCameraState viewport(const Scene& scene) {
     {
         std::cout << "Failed to create GLFW window" << std::endl;
         glfwTerminate();
-        return -1;
+        // return -1
+        return camera;
     }
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
@@ -60,7 +68,7 @@ EditorCameraState viewport(const Scene& scene) {
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
         std::cout << "Failed to initialize GLAD" << std::endl;
-        return -1;
+        return camera;
     }
 
 
@@ -127,10 +135,24 @@ EditorCameraState viewport(const Scene& scene) {
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
     // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glVertexAttribPointer(
+    0,
+    3,
+    GL_FLOAT,
+    GL_FALSE,
+    6 * sizeof(float),
+    (void*)0);
+
     glEnableVertexAttribArray(0);
     // texture coord attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(
+    1,
+    3,
+    GL_FLOAT,
+    GL_FALSE,
+    6 * sizeof(float),
+    (void*)(3 * sizeof(float)));
+
     glEnableVertexAttribArray(1);
 
 
@@ -167,6 +189,25 @@ EditorCameraState viewport(const Scene& scene) {
         // camera/view transformation
         glm::mat4 view = camera.GetViewMatrix();
         ourShader.setMat4("view", view);
+
+        ourShader.setVec3(
+    "cameraPosition",
+            camera.Position
+        );
+        ourShader.setFloat(
+            "focusDistance",
+            camera.FocusDistance
+        );
+
+        ourShader.setFloat(
+            "defocusAngle",
+            camera.DefocusAngle
+        );
+        ourShader.setVec3(
+    "cameraFront",
+    camera.Front
+);
+
 
         glBindVertexArray(VAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -226,7 +267,7 @@ EditorCameraState viewport(const Scene& scene) {
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
-    return 0;
+    return camera;
 }
 
 
