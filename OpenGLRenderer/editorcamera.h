@@ -5,7 +5,6 @@
 #ifndef NB_RENDERER_EDITORCAMERA_H
 #define NB_RENDERER_EDITORCAMERA_H
 
-#include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
