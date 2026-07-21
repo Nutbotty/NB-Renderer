@@ -1,0 +1,182 @@
+#version 430 core
+
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+layout(rgba32f, binding = 0 ) uniform writeonly image2D outputImage;
+const float MAX_RAY_DISTANCE = 1e30;
+/*
+ * Structs
+ */
+struct Ray {
+    vec3 origin;
+    vec3 direction;
+};
+
+struct Sphere {
+    vec3 center;
+    float radius;
+};
+
+struct Camera {
+    float aspectRatio;
+    float focal_length;
+    vec3 center;
+    vec3 vup;
+    vec3 pixel00_loc;
+    vec3 pixel_delta_u;
+    vec3 pixel_delta_v;
+    vec3 viewport_u;
+    vec3 viewport_v;
+    vec3 viewportUpperLeft;
+};
+
+/*
+ * Hit record and utils
+ */
+struct HitRecord {
+    vec3 p;
+    vec3 normal;
+    float t;
+    bool frontFace;
+};
+
+void setFaceNormal(Ray r, vec3 outwardNormal, inout HitRecord record) {
+    record.frontFace = dot(r.direction, outwardNormal) < 0.0;
+    record.normal = record.frontFace ? outwardNormal : -outwardNormal;
+}
+
+/*
+ * Interval and utils
+ */
+struct Interval {
+    float min;
+    float max;
+};
+
+float intervalSize(Interval interval) {
+    return interval.max - interval.min;
+}
+
+bool intervalContains(Interval interval, float value){
+    return interval.min <= value && value <= interval.max;
+}
+
+bool intervalSurrounds(Interval interval, float value){
+    return interval.min < value && value < interval.max;
+}
+
+float intervalClamp(Interval interval, float value) {
+    return clamp(value, interval.min, interval.max);
+}
+
+/*
+ * World. Later, this array will be replaced by an SSBO uploaded from C++.
+ */
+const int sphereCount = 2;
+
+const Sphere spheres[sphereCount] = Sphere[](
+    Sphere(vec3(0.0, 0.0, -1.0), 0.5),
+    Sphere(vec3(0.0, -100.5, -1.0), 100.0)
+);
+
+
+/*
+ * Hit detection and color
+ */
+vec3 rayAt(Ray r, float t) {
+    return r.origin + t * r.direction;
+}
+
+bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
+    vec3 oc = r.origin - sphere.center;
+    float a = dot(r.direction, r.direction);
+    float h = dot(oc, r.direction);
+    float c = dot(oc, oc) - sphere.radius * sphere.radius;
+    float discriminant = h * h - a * c;
+
+    if (discriminant < 0.0) {
+        return false;
+    }
+    float sqrtDiscriminant = sqrt(discriminant);
+    float root = (-h - sqrtDiscriminant) / a;
+    if (!intervalSurrounds(rT, root)) {
+        root = (-h + sqrtDiscriminant) / a;
+        if (!intervalSurrounds(rT, root)) {
+            return false;
+        }
+    }
+    record.t = root;
+    record.p = rayAt(r, record.t);
+    vec3 outwardNormal = (record.p - sphere.center) / sphere.radius;
+    setFaceNormal(r, outwardNormal, record);
+    return true;
+}
+
+bool hitWorld(Ray r, Interval rT, out HitRecord record) {
+    HitRecord tempRecord;
+    bool hitAnything = false;
+    float closestSoFar = rT.max;
+    for (int i = 0; i < sphereCount; ++i) {
+        Interval currentInterval = Interval(rT.min, closestSoFar);
+        if (hitSphere(spheres[i], r, currentInterval, tempRecord)) {
+            hitAnything = true;
+            closestSoFar = tempRecord.t;
+            record = tempRecord;
+        }
+    }
+    return hitAnything;
+}
+
+vec3 skyBoxColor(Ray r) {
+    vec3 unitDirection = normalize(r.direction);
+    float blend = 0.5 * (unitDirection.y + 1.0);
+    return mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), blend);
+}
+
+vec3 rayColor(Ray r) {
+    HitRecord record;
+    Interval visibleRayInterval = Interval(0.001, MAX_RAY_DISTANCE);
+    if (hitWorld(r, visibleRayInterval, record)) {
+        return 0.5 * (record.normal + vec3(1.0));
+    }
+    return skyBoxColor(r);
+}
+
+/*
+ * main loop
+ */
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 imageDimensions = imageSize(outputImage);
+    if (pixel.x >= imageDimensions.x || pixel.y >= imageDimensions.y) {
+        return;
+    }
+
+    Camera camera;
+    float imageWidth = float(imageDimensions.x);
+    float imageHeight = float(imageDimensions.y);
+    camera.aspectRatio = imageWidth / imageHeight;
+
+    float focalLength = 1.0;
+    float viewportHeight = 2.0;
+    float viewportWidth = viewportHeight * camera.aspectRatio;
+
+    camera.center = vec3 (0.0, 0.0, 0.0);
+    vec3 viewportU = vec3(viewportWidth, 0.0, 0.0);
+    vec3 viewportV = vec3(0.0, viewportHeight, 0.0);
+    vec3 viewportLowerLeft = camera.center - viewportU * 0.5 - viewportV * 0.5 - vec3(0.0, 0.0, focalLength);
+
+    /*
+     * Sample pixel at center
+     */
+    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(imageDimensions);
+
+    vec3 pixelPosition = viewportLowerLeft + uv.x * viewportU + uv.y * viewportV;
+
+    Ray ray;
+    ray.origin = camera.center;
+    ray.direction = pixelPosition - camera.center;
+
+    vec3 color = rayColor(ray);
+
+    imageStore(outputImage, pixel, vec4(color, 1.0));
+}
