@@ -24,13 +24,13 @@ Window::~Window()
 }
 
 int Window::Initialize() {
-    
+
     if (!glfwInit())
     {
         std::cout << "Failed to initialize GLFW" << std::endl;
         return -1;
     }
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
@@ -64,7 +64,6 @@ int Window::Initialize() {
         std::cout << "Failed to initialize GLAD" << std::endl;
         return -1;
     }
-
     return 0;
 }
 
