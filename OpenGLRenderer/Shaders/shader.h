@@ -19,7 +19,7 @@ class Shader
 public:
     unsigned int ID;
     // constructor generates the shader on the fly
-    // ------------------------------------------------------------------------
+    // ----a-------------------------------------------------------------------
     Shader(const char* vertexPath, const char* fragmentPath)
     {
         // 1. retrieve the vertex/fragment source code from filePath
@@ -74,6 +74,48 @@ public:
         glDeleteShader(vertex);
         glDeleteShader(fragment);
 
+    }
+    explicit Shader(const char* computePath)
+    {
+        std::ifstream computeFile;
+        computeFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+
+        std::string computeCode;
+
+        try
+        {
+            computeFile.open(computePath);
+
+            std::stringstream stream;
+            stream << computeFile.rdbuf();
+
+            computeFile.close();
+            computeCode = stream.str();
+        }
+        catch (const std::ifstream::failure& e)
+        {
+            std::cerr
+                << "ERROR::COMPUTE_SHADER::FILE_NOT_SUCCESSFULLY_READ: "
+                << e.what()
+                << '\n';
+
+            ID = 0;
+            return;
+        }
+
+        const char* source = computeCode.c_str();
+
+        const GLuint computeShader = glCreateShader(GL_COMPUTE_SHADER);
+        glShaderSource(computeShader, 1, &source, nullptr);
+        glCompileShader(computeShader);
+        checkCompileErrors(computeShader, "COMPUTE");
+
+        ID = glCreateProgram();
+        glAttachShader(ID, computeShader);
+        glLinkProgram(ID);
+        checkCompileErrors(ID, "PROGRAM");
+
+        glDeleteShader(computeShader);
     }
     // activate the shader
     // ------------------------------------------------------------------------
@@ -138,6 +180,16 @@ public:
     void setMat4(const std::string &name, const glm::mat4 &mat) const
     {
         glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, &mat[0][0]);
+    }
+
+    void setUInt(const std::string& name, unsigned int value) const
+    {
+        glUniform1ui(glGetUniformLocation(ID, name.c_str()), value);
+    }
+
+    void setIVec2(const std::string& name, const glm::ivec2& value) const
+    {
+        glUniform2iv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
     }
 
 private:
