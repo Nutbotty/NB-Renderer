@@ -3,11 +3,22 @@
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform writeonly image2D outputImage;
 const float MAX_RAY_DISTANCE = 1e30;
-const int SAMPLES_PER_PIXEL = 10;
+const int SAMPLES_PER_PIXEL = 50;
 const int MAX_DEPTH = 10;
 /*
  * Structs
  */
+const int MATERIAL_LAMBERTIAN = 0;
+const int MATERIAL_METAL = 1;
+const int MATERIAL_DIELECTRIC = 2;
+
+struct Material {
+    int type;
+    vec3 albedo;
+    float fuzz;
+    float refractionIndex;
+};
+
 struct Ray {
     vec3 origin;
     vec3 direction;
@@ -16,6 +27,7 @@ struct Ray {
 struct Sphere {
     vec3 center;
     float radius;
+    int material;
 };
 
 struct Camera {
@@ -39,6 +51,7 @@ struct HitRecord {
     vec3 normal;
     float t;
     bool frontFace;
+    int material;
 };
 
 void setFaceNormal(Ray r, vec3 outwardNormal, inout HitRecord record) {
@@ -70,27 +83,28 @@ float intervalClamp(Interval interval, float value) {
     return clamp(value, interval.min, interval.max);
 }
 
+
+bool nearZero(vec3 value) {
+    const float epsilon = 1e-8;
+    return all(lessThan(abs(value), vec3(epsilon)));
+}
 /*
  * World. Later, this array will be replaced by an SSBO uploaded from C++.
  */
+const int materialCount = 2;
+const Material materials[materialCount] = Material[](Material(MATERIAL_LAMBERTIAN, vec3(0.1, 0.2, 0.5), 0.0, 0.6), Material(MATERIAL_METAL, vec3(0.16, 0.16, 0.16), 0.0, 0.3));
 const int sphereCount = 2;
-
-const Sphere spheres[sphereCount] = Sphere[](
-    Sphere(vec3(0.0, 0.0, -1.0), 0.5),
-    Sphere(vec3(0.0, -100.5, -1.0), 100.0)
-);
+const Sphere spheres[sphereCount] = Sphere[](Sphere(vec3(0.0, 0.0, -1.0), 0.5, 1), Sphere(vec3(0.0, -100.5, -1.0), 100.0, 0));
 
 /*
  * RNG
  */
 uint rngState;
-
 uint pcgHash(uint inputValue) {
     uint state = inputValue * 747796405u + 2891336453u;
     uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
     return (word >> 22u) ^ word;
 }
-
 float randomFloat() {
     rngState = pcgHash(rngState);
     return float(rngState >> 8u) * (1.0 / 16777216.0);
@@ -104,18 +118,16 @@ vec3 randomVec3(float min, float max) {
             mix(min, max, randomFloat())
     );
 }
-
 vec3 randomUnitVector() {
     for (int attempt = 0; attempt < 64; ++attempt) {
         vec3 p = randomVec3(-1.0, 1.0);
         float lengthSquared = dot(p, p);
-        if (1e-160 < lengthSquared  && lengthSquared <= 1.0) {
+        if (lengthSquared > 1e-12 && lengthSquared <= 1.0) {
             return p / sqrt(lengthSquared);
         }
     }
     return vec3(1.0, 0.0, 0.0);
 }
-
 vec3 randomOnHemisphere(vec3 normal) {
     vec3 onUnitSphere = randomUnitVector();
     if (dot(onUnitSphere, normal) > 0.0) {
@@ -133,6 +145,36 @@ vec2 sampleSquare() {
 /*
  * Hit detection and color
  */
+
+bool scatterLambertian(Ray r_in, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
+    vec3 scatter_direction = rec.normal + randomUnitVector();
+    if (nearZero(scatter_direction)) {
+        scatter_direction = rec.normal;
+    }
+    scattered.origin = rec.p;
+    scattered.direction = scatter_direction;
+    attenuation = material.albedo;
+    return true;
+}
+bool scatterMetal(Ray r_in, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
+    vec3 reflected = reflect(normalize(r_in.direction), rec.normal);
+    float fuzz = clamp(material.fuzz, 0.0, 1.0);
+    scattered.direction = reflected + fuzz * randomUnitVector();
+    scattered = Ray(rec.p, reflected);
+    attenuation = material.albedo;
+    return (dot(scattered.direction, rec.normal) > 0);
+}
+bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered) {
+    Material material = materials[rec.material];
+    if (material.type == MATERIAL_LAMBERTIAN){
+        return scatterLambertian(rayIn, rec, material, attenuation, scattered); }
+    else if (material.type == MATERIAL_METAL) {
+        return scatterMetal(rayIn, rec, material, attenuation, scattered); }
+    /*
+     * Metal and dielectric later.
+     */
+    return false;
+}
 vec3 rayAt(Ray r, float t) {
     return r.origin + t * r.direction;
 }
@@ -143,7 +185,6 @@ bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     float h = dot(oc, r.direction);
     float c = dot(oc, oc) - sphere.radius * sphere.radius;
     float discriminant = h * h - a * c;
-
     if (discriminant < 0.0) {
         return false;
     }
@@ -159,9 +200,9 @@ bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     record.p = rayAt(r, record.t);
     vec3 outwardNormal = (record.p - sphere.center) / sphere.radius;
     setFaceNormal(r, outwardNormal, record);
+    record.material = sphere.material;
     return true;
 }
-
 bool hitWorld(Ray r, Interval rT, out HitRecord record) {
     HitRecord tempRecord;
     bool hitAnything = false;
@@ -176,23 +217,25 @@ bool hitWorld(Ray r, Interval rT, out HitRecord record) {
     }
     return hitAnything;
 }
-
 vec3 skyBoxColor(Ray r) {
     vec3 unitDirection = normalize(r.direction);
     float blend = 0.5 * (unitDirection.y + 1.0);
     return mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), blend);
 }
-
 vec3 rayColor(Ray r) {
     Ray currentRay = r;
     vec3 throughput = vec3(1.0, 1.0, 1.0);
     for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
-        HitRecord record;
-        if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), record)) {
-            vec3 direction = randomOnHemisphere(record.normal);
-            currentRay.origin = record.p;
-            currentRay.direction = direction;
-            throughput *= 0.5;
+        HitRecord rec;
+        if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), rec)) {
+            vec3 direction = rec.normal + randomUnitVector();
+            Ray scattered;
+            vec3 attenuation;
+            if (!scatterMaterial(currentRay, rec, attenuation, scattered)){
+                return vec3(0.0);
+            }
+            throughput *= attenuation;
+            currentRay = scattered;
         }
         else {
             return throughput * skyBoxColor(currentRay);
@@ -200,8 +243,6 @@ vec3 rayColor(Ray r) {
     }
     return vec3(0.0);
 }
-
-
 
 
 /*
@@ -249,6 +290,14 @@ void main() {
         ray.direction = pixelPosition - camera.center;
         color += rayColor(ray);
     }
-    vec3 finalColor = color / float(SAMPLES_PER_PIXEL);
+    vec3 finalColor =
+    color / float(SAMPLES_PER_PIXEL);
+
+    /*
+     * Linear to gamma 2.
+     * Apply this only after averaging all linear samples.
+     */
+    finalColor =
+    sqrt(max(finalColor, vec3(0.0)));
     imageStore(outputImage, pixel, vec4(finalColor, 1.0));
 }
