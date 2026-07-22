@@ -91,10 +91,18 @@ bool nearZero(vec3 value) {
 /*
  * World. Later, this array will be replaced by an SSBO uploaded from C++.
  */
-const int materialCount = 2;
-const Material materials[materialCount] = Material[](Material(MATERIAL_LAMBERTIAN, vec3(0.1, 0.2, 0.5), 0.0, 0.6), Material(MATERIAL_METAL, vec3(0.16, 0.16, 0.16), 0.0, 0.3));
-const int sphereCount = 2;
-const Sphere spheres[sphereCount] = Sphere[](Sphere(vec3(0.0, 0.0, -1.0), 0.5, 1), Sphere(vec3(0.0, -100.5, -1.0), 100.0, 0));
+const int materialCount = 3;
+const Material materials[materialCount] = Material[](
+        Material(MATERIAL_LAMBERTIAN, vec3(0.1, 0.2, 0.5), 0.0, 0.6),
+        Material(MATERIAL_METAL, vec3(0.16, 0.16, 0.16), 0.0, 0.3),
+        Material(MATERIAL_DIELECTRIC, vec3(1.0, 1.0, 1.0), 0.0, 1.50)
+);
+const int sphereCount = 3;
+const Sphere spheres[sphereCount] = Sphere[](
+        Sphere(vec3(0.0, 0.0, -1.0), 0.5, 1),
+        Sphere(vec3(0.0, -100.5, -1.0), 100.0, 0),
+        Sphere(vec3(1.0, 0.0, -1.0), 0.3, 2)
+);
 
 /*
  * RNG
@@ -164,15 +172,37 @@ bool scatterMetal(Ray r_in, HitRecord rec, Material material, out vec3 attenuati
     attenuation = material.albedo;
     return (dot(scattered.direction, rec.normal) > 0);
 }
+float reflectance(float cosine, float refractionIndex) {
+    // Schlick's approximation
+    float r0 = (1.0 - refractionIndex) / (1.0 + refractionIndex);
+    r0 *= r0;
+    return r0 + (1.0 - r0) * pow(1.0 - cosine, 5.0);
+}
+bool scatterDielectric(Ray r_in, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
+    attenuation = vec3(1.0);
+    float ri = rec.frontFace ? (1.0 / material.refractionIndex) : material.refractionIndex;
+    vec3 unitDirection = normalize(r_in.direction);
+    float cosTheta = min(dot(-unitDirection, rec.normal), 1.0);
+    float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+    bool cannotRefract = ri * sinTheta > 1.0;
+    vec3 direction;
+    if (cannotRefract || reflectance(cosTheta, ri) > randomFloat()) {
+        direction = reflect(unitDirection, rec.normal);
+    } else {
+        direction = refract(unitDirection, rec.normal, ri);
+    }
+    scattered = Ray(rec.p, direction);
+    return true;
+}
 bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered) {
     Material material = materials[rec.material];
     if (material.type == MATERIAL_LAMBERTIAN){
         return scatterLambertian(rayIn, rec, material, attenuation, scattered); }
     else if (material.type == MATERIAL_METAL) {
         return scatterMetal(rayIn, rec, material, attenuation, scattered); }
-    /*
-     * Metal and dielectric later.
-     */
+    else if (material.type == MATERIAL_DIELECTRIC) {
+        return scatterDielectric(rayIn, rec, material, attenuation, scattered);
+    }
     return false;
 }
 vec3 rayAt(Ray r, float t) {
