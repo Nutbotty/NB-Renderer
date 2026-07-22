@@ -2,6 +2,34 @@
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform writeonly image2D outputImage;
+struct PackedMaterial {
+    vec4 albedoFuzz;
+    vec4 optical;
+    ivec4 metadata;
+};
+
+struct PackedSphere {
+    vec4 centerRadius;
+    ivec4 metadata;
+};
+
+layout(std430, binding = 1) readonly buffer MaterialBuffer {
+    PackedMaterial materialBuffer[];
+};
+
+layout(std430, binding = 2) readonly buffer SphereBuffer {
+    PackedSphere sphereBuffer[];
+};
+
+
+uniform vec3 uCameraLookFrom;
+uniform vec3 uCameraLookAt;
+uniform vec3 uCameraVUp;
+
+uniform float uCameraVerticalFov;
+uniform float uCameraFocusDistance;
+uniform float uCameraDefocusAngle;
+
 const float MAX_RAY_DISTANCE = 1e30;
 const int SAMPLES_PER_PIXEL = 50;
 const int MAX_DEPTH = 10;
@@ -29,18 +57,54 @@ struct Sphere {
     float radius;
     int material;
 };
+Material loadMaterial(int index)
+{
+    PackedMaterial packed =
+    materialBuffer[index];
 
+    Material material;
+
+    material.type =
+    packed.metadata.x;
+
+    material.albedo =
+    packed.albedoFuzz.xyz;
+
+    material.fuzz =
+    packed.albedoFuzz.w;
+
+    material.refractionIndex =
+    packed.optical.x;
+
+    return material;
+}
+
+Sphere loadSphere(int index)
+{
+    PackedSphere packed =
+    sphereBuffer[index];
+
+    Sphere sphere;
+
+    sphere.center =
+    packed.centerRadius.xyz;
+
+    sphere.radius =
+    packed.centerRadius.w;
+
+    sphere.material =
+    packed.metadata.x;
+
+    return sphere;
+}
 struct Camera {
     float aspectRatio;
-    float focal_length;
     vec3 center;
-    vec3 vup;
     vec3 pixel00_loc;
     vec3 pixel_delta_u;
     vec3 pixel_delta_v;
-    vec3 viewport_u;
-    vec3 viewport_v;
-    vec3 viewportUpperLeft;
+    vec3 defocus_disc_u;
+    vec3 defocus_disc_v;
 };
 
 /*
@@ -89,22 +153,6 @@ bool nearZero(vec3 value) {
     return all(lessThan(abs(value), vec3(epsilon)));
 }
 /*
- * World. Later, this array will be replaced by an SSBO uploaded from C++.
- */
-const int materialCount = 3;
-const Material materials[materialCount] = Material[](
-        Material(MATERIAL_LAMBERTIAN, vec3(0.1, 0.2, 0.5), 0.0, 0.6),
-        Material(MATERIAL_METAL, vec3(0.16, 0.16, 0.16), 0.0, 0.3),
-        Material(MATERIAL_DIELECTRIC, vec3(1.0, 1.0, 1.0), 0.0, 1.50)
-);
-const int sphereCount = 3;
-const Sphere spheres[sphereCount] = Sphere[](
-        Sphere(vec3(0.0, 0.0, -1.0), 0.5, 1),
-        Sphere(vec3(0.0, -100.5, -1.0), 100.0, 0),
-        Sphere(vec3(1.0, 0.0, -1.0), 0.3, 2)
-);
-
-/*
  * RNG
  */
 uint rngState;
@@ -143,6 +191,22 @@ vec3 randomOnHemisphere(vec3 normal) {
     }
     return -onUnitSphere;
 }
+vec2 randomInUnitDisk() {
+    for (int attempt = 0; attempt < 64; ++attempt)
+    {
+        vec2 p = vec2(
+                2.0 * randomFloat() - 1.0,
+                2.0 * randomFloat() - 1.0
+        );
+
+        if (dot(p, p) < 1.0)
+        {
+            return p;
+        }
+    }
+
+    return vec2(0.0);
+}
 vec2 sampleSquare() {
     return vec2(
             randomFloat() - 0.5,
@@ -167,8 +231,8 @@ bool scatterLambertian(Ray r_in, HitRecord rec, Material material, out vec3 atte
 bool scatterMetal(Ray r_in, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
     vec3 reflected = reflect(normalize(r_in.direction), rec.normal);
     float fuzz = clamp(material.fuzz, 0.0, 1.0);
-    scattered.direction = reflected + fuzz * randomUnitVector();
     scattered = Ray(rec.p, reflected);
+    scattered.direction = reflected + fuzz * randomUnitVector();
     attenuation = material.albedo;
     return (dot(scattered.direction, rec.normal) > 0);
 }
@@ -195,7 +259,7 @@ bool scatterDielectric(Ray r_in, HitRecord rec, Material material, out vec3 atte
     return true;
 }
 bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered) {
-    Material material = materials[rec.material];
+    Material material = loadMaterial(rec.material);
     if (material.type == MATERIAL_LAMBERTIAN){
         return scatterLambertian(rayIn, rec, material, attenuation, scattered); }
     else if (material.type == MATERIAL_METAL) {
@@ -237,9 +301,11 @@ bool hitWorld(Ray r, Interval rT, out HitRecord record) {
     HitRecord tempRecord;
     bool hitAnything = false;
     float closestSoFar = rT.max;
+    int sphereCount = sphereBuffer.length();
     for (int i = 0; i < sphereCount; ++i) {
+        Sphere sphere = loadSphere(i);
         Interval currentInterval = Interval(rT.min, closestSoFar);
-        if (hitSphere(spheres[i], r, currentInterval, tempRecord)) {
+        if (hitSphere(sphere, r, currentInterval, tempRecord)) {
             hitAnything = true;
             closestSoFar = tempRecord.t;
             record = tempRecord;
@@ -258,7 +324,6 @@ vec3 rayColor(Ray r) {
     for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
         HitRecord rec;
         if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), rec)) {
-            vec3 direction = rec.normal + randomUnitVector();
             Ray scattered;
             vec3 attenuation;
             if (!scatterMaterial(currentRay, rec, attenuation, scattered)){
@@ -274,7 +339,117 @@ vec3 rayColor(Ray r) {
     return vec3(0.0);
 }
 
+Camera makeCamera(ivec2 imageDimensions) {
+    Camera camera;
+    camera.center = uCameraLookFrom;
+    float imageWidth = float(imageDimensions.x);
+    float imageHeight = float(imageDimensions.y);
+    float aspectRatio = imageWidth / imageHeight;
 
+    /*
+     * Camera coordinate basis.
+     *
+     * w points backward from the target toward the camera.
+     * u points camera-right.
+     * v points camera-up.
+     */
+    vec3 w = normalize(uCameraLookFrom - uCameraLookAt);
+
+    vec3 u = normalize(cross(uCameraVUp, w));
+
+    vec3 v = cross(w, u);
+
+    /*
+     * The viewport lies on the focal plane.
+     */
+    float theta = radians(uCameraVerticalFov);
+
+    float viewportHeight = 2.0 * tan(theta * 0.5) * uCameraFocusDistance;
+
+    float viewportWidth = viewportHeight * aspectRatio;
+
+    vec3 viewportU = viewportWidth * u;
+
+    /*
+     * Negative v makes image rows progress from top to bottom,
+     * matching RTIOW's camera construction.
+     */
+    vec3 viewportV = viewportHeight * v;
+
+    camera.pixel_delta_u = viewportU / imageWidth;
+
+    camera.pixel_delta_v = viewportV / imageHeight;
+
+    vec3 viewportUpperLeft = camera.center - uCameraFocusDistance * w - viewportU * 0.5 - viewportV * 0.5;
+
+    camera.pixel00_loc = viewportUpperLeft + 0.5 * (camera.pixel_delta_u + camera.pixel_delta_v);
+
+    /*
+     * Construct the lens disk in camera-space.
+     */
+    float defocusRadius = uCameraFocusDistance * tan(radians(uCameraDefocusAngle * 0.5));
+
+    camera.defocus_disc_u = u * defocusRadius;
+
+    camera.defocus_disc_v = v * defocusRadius;
+
+    return camera;
+}
+vec3 defocusDiskSample(Camera camera)
+{
+    vec2 p =
+    randomInUnitDisk();
+
+    return camera.center
+    + p.x * camera.defocus_disc_u
+    + p.y * camera.defocus_disc_v;
+}
+
+Ray getCameraRay(
+        Camera camera,
+        ivec2 pixel
+)
+{
+    /*
+     * pixel00Loc is already the center of pixel (0, 0),
+     * so sampleSquare() is added directly to the integer
+     * pixel coordinates.
+     */
+    vec2 offset =
+    sampleSquare();
+
+    vec3 pixelSample =
+    camera.pixel00_loc
+    + (
+    float(pixel.x) + offset.x
+    ) * camera.pixel_delta_u
+    + (
+    float(pixel.y) + offset.y
+    ) * camera.pixel_delta_v;
+
+    vec3 rayOrigin;
+
+    if (uCameraDefocusAngle <= 0.0)
+    {
+        rayOrigin =
+        camera.center;
+    }
+    else
+    {
+        rayOrigin =
+        defocusDiskSample(camera);
+    }
+
+    Ray ray;
+
+    ray.origin =
+    rayOrigin;
+
+    ray.direction =
+    pixelSample - rayOrigin;
+
+    return ray;
+}
 /*
  * main loop
  */
@@ -295,39 +470,17 @@ void main() {
     rngState =
     pcgHash(pixelIndex + 1u);
 
-    Camera camera;
-    float imageWidth = float(imageDimensions.x);
-    float imageHeight = float(imageDimensions.y);
-    camera.aspectRatio = imageWidth / imageHeight;
+//    Camera camera;
+    Camera camera =
+    makeCamera(imageDimensions);
 
-    float focalLength = 1.0;
-    float viewportHeight = 2.0;
-    float viewportWidth = viewportHeight * camera.aspectRatio;
+    vec3 color = vec3(0.0);
 
-    camera.center = vec3 (0.0, 0.0, 0.0);
-    vec3 viewportU = vec3(viewportWidth, 0.0, 0.0);
-    vec3 viewportV = vec3(0.0, viewportHeight, 0.0);
-    vec3 viewportLowerLeft = camera.center - viewportU * 0.5 - viewportV * 0.5 - vec3(0.0, 0.0, focalLength);
-
-    vec3 color = vec3(0.0, 0.0, 0.0);
-    Ray ray;
-    ray.origin = camera.center;
-    for(int s = 0; s < SAMPLES_PER_PIXEL; ++s) {
-        vec2 offset = sampleSquare();
-        vec2 samplePosition = vec2(pixel) + vec2(0.5) + offset;
-        vec2 uv = samplePosition / vec2(imageDimensions);
-        vec3 pixelPosition = viewportLowerLeft + uv.x * viewportU + uv.y * viewportV;
-        ray.direction = pixelPosition - camera.center;
+    for (int sampleIndex = 0; sampleIndex < SAMPLES_PER_PIXEL; ++sampleIndex) {
+        Ray ray = getCameraRay(camera, pixel);
         color += rayColor(ray);
     }
-    vec3 finalColor =
-    color / float(SAMPLES_PER_PIXEL);
-
-    /*
-     * Linear to gamma 2.
-     * Apply this only after averaging all linear samples.
-     */
-    finalColor =
-    sqrt(max(finalColor, vec3(0.0)));
+    vec3 finalColor = color / float(SAMPLES_PER_PIXEL);
+    finalColor = sqrt(max(finalColor, vec3(0.0)));
     imageStore(outputImage, pixel, vec4(finalColor, 1.0));
 }
