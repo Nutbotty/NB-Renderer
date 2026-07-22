@@ -104,13 +104,24 @@ vec3 randomVec3(float min, float max) {
             mix(min, max, randomFloat())
     );
 }
-vec3 randomOnHemisphere(vec3 normal) {
-        vec3 onUnitSphere = normalize(randomVec3());
-        if (dot(onUnitSphere, normal) > 0.0) {
-            return onUnitSphere;
-        } else {
-            return -onUnitSphere;
+
+vec3 randomUnitVector() {
+    for (int attempt = 0; attempt < 64; ++attempt) {
+        vec3 p = randomVec3(-1.0, 1.0);
+        float lengthSquared = dot(p, p);
+        if (1e-160 < lengthSquared  && lengthSquared <= 1.0) {
+            return p / sqrt(lengthSquared);
         }
+    }
+    return vec3(1.0, 0.0, 0.0);
+}
+
+vec3 randomOnHemisphere(vec3 normal) {
+    vec3 onUnitSphere = randomUnitVector();
+    if (dot(onUnitSphere, normal) > 0.0) {
+        return onUnitSphere;
+    }
+    return -onUnitSphere;
 }
 vec2 sampleSquare() {
     return vec2(
@@ -173,14 +184,21 @@ vec3 skyBoxColor(Ray r) {
 }
 
 vec3 rayColor(Ray r) {
-    HitRecord record;
-    Interval visibleRayInterval = Interval(0.001, MAX_RAY_DISTANCE);
-    if (hitWorld(r, visibleRayInterval, record)) {
-        vec3 direction = randomOnHemisphere(record.normal);
-//        return 0.5 * (record.normal + vec3(1.0));
-        return 0.5 * (record.normal + vec3(1.0));
+    Ray currentRay = r;
+    vec3 throughput = vec3(1.0, 1.0, 1.0);
+    for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
+        HitRecord record;
+        if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), record)) {
+            vec3 direction = randomOnHemisphere(record.normal);
+            currentRay.origin = record.p;
+            currentRay.direction = direction;
+            throughput *= 0.5;
+        }
+        else {
+            return throughput * skyBoxColor(currentRay);
+        }
     }
-    return skyBoxColor(r);
+    return vec3(0.0);
 }
 
 
@@ -196,6 +214,16 @@ void main() {
         return;
     }
 
+    /*
+ * Seed this invocation's random stream.
+ */
+    uint pixelIndex =
+    uint(pixel.x)
+    + uint(pixel.y)
+    * uint(imageDimensions.x);
+    rngState =
+    pcgHash(pixelIndex + 1u);
+
     Camera camera;
     float imageWidth = float(imageDimensions.x);
     float imageHeight = float(imageDimensions.y);
@@ -210,20 +238,10 @@ void main() {
     vec3 viewportV = vec3(0.0, viewportHeight, 0.0);
     vec3 viewportLowerLeft = camera.center - viewportU * 0.5 - viewportV * 0.5 - vec3(0.0, 0.0, focalLength);
 
-    /*
-     * Sample pixel at center
-     */
-    vec2 uv = (vec2(pixel) + vec2(0.5)) / vec2(imageDimensions);
-
-    vec3 pixelPosition = viewportLowerLeft + uv.x * viewportU + uv.y * viewportV;
-
+    vec3 color = vec3(0.0, 0.0, 0.0);
     Ray ray;
     ray.origin = camera.center;
-
-//    vec3 color = rayColor(ray);
-    vec3 color = vec3(0.0, 0.0, 0.0);
-    for(int s = 0; s < SAMPLES_PER_PIXEL; ++s)
-    {
+    for(int s = 0; s < SAMPLES_PER_PIXEL; ++s) {
         vec2 offset = sampleSquare();
         vec2 samplePosition = vec2(pixel) + vec2(0.5) + offset;
         vec2 uv = samplePosition / vec2(imageDimensions);
@@ -232,7 +250,5 @@ void main() {
         color += rayColor(ray);
     }
     vec3 finalColor = color / float(SAMPLES_PER_PIXEL);
-//    vec3 finalColor = rayColor(ray);
-
     imageStore(outputImage, pixel, vec4(finalColor, 1.0));
 }
