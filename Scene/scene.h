@@ -12,6 +12,7 @@
 using MaterialId = std::uint32_t;
 using SphereId = std::uint32_t;
 using QuadId = std::uint32_t;
+using TriId = std::uint32_t;
 
 enum class MaterialType : std::uint32_t
 {
@@ -31,6 +32,12 @@ struct SceneSphere {
     MaterialId material = 0;
 };
 struct SceneQuad {
+    glm::vec3 Q{0.0f, 0.0f, 0.0f};
+    glm::vec3 u{1.0f, 0.0f, 0.0f};
+    glm::vec3 v{0.0f, 1.0f, 0.0f};
+    MaterialId material = 0;
+};
+struct SceneTri {
     glm::vec3 Q{0.0f, 0.0f, 0.0f};
     glm::vec3 u{1.0f, 0.0f, 0.0f};
     glm::vec3 v{0.0f, 1.0f, 0.0f};
@@ -82,6 +89,16 @@ public:
         m_Quads.push_back(quad);
         return id;
     }
+    TriId addTri(const glm::vec3& Q, const glm::vec3& u, const glm::vec3& v, MaterialId material) {
+        SceneTri tri;
+        tri.Q = Q;
+        tri.u = u;
+        tri.v = v;
+        tri.material = material;
+        const auto id = static_cast<TriId>(m_Tris.size());
+        m_Tris.push_back(tri);
+        return id;
+    }
     void SetCamera(const SceneCamera& camera) {
         m_Camera = camera;
         MarkDirty();
@@ -99,6 +116,10 @@ public:
     {
         return m_Quads;
     }
+    [[nodiscard]] const std::vector<SceneTri>& GetTris() const
+    {
+        return m_Tris;
+    }
     [[nodiscard]] const SceneCamera& GetCamera() const
     {
         return m_Camera;
@@ -106,6 +127,8 @@ public:
 
     void Clear(){
         m_Spheres.clear();
+        m_Quads.clear();
+        m_Tris.clear();
         m_Materials.clear();
 
         MarkDirty();
@@ -123,6 +146,7 @@ private:
     std::vector<SceneMaterial> m_Materials;
     std::vector<SceneSphere> m_Spheres;
     std::vector<SceneQuad> m_Quads;
+    std::vector<SceneTri> m_Tris;
     SceneCamera m_Camera;
 
     bool m_Dirty = true;

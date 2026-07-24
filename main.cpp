@@ -5,6 +5,7 @@
 #include "CPURenderer/hittable_list.h"
 #include "CPURenderer/sphere.h"
 #include "CPURenderer/Quad.h"
+#include "CPURenderer/Tri.h"
 #include "CPURenderer/material.h"
 #include "CPURenderer/texture.h"
 #include "OpenGLRenderer/EditorOpenGL.h"
@@ -107,6 +108,18 @@ hittable_list BuildCpuWorld(const Scene& scene)
         );
     }
 
+    for (const SceneTri& source : scene.GetTris())
+    {
+        world.add(
+            std::make_shared<tri>(
+                point3(source.Q.x,source.Q.y,source.Q.z),
+                vec3(source.u.x,source.u.y,source.u.z),
+                vec3(source.v.x,source.v.y,source.v.z),
+                cpuMaterials[source.material]
+            )
+        );
+    }
+
     return world;
 }
 
@@ -118,13 +131,14 @@ void quads(hittable_list& world, Scene& scene) {
     const MaterialId mat3 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(1.0f, 0.5f, 0.0f));
     const MaterialId mat4 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.2f, 0.8f, 0.8f));
     scene.addQuad(glm::vec3(-3, -2, 5), glm::vec3(0, 0, -4), glm::vec3(0, 4, 0), groundMaterial);
-    scene.addQuad(glm::vec3(-2, -2, 0), glm::vec3(4, 0, 0), glm::vec3(0, 4, 0), mat1);
+    scene.addTri(glm::vec3(-2, -2, 0), glm::vec3(4, 0, 0), glm::vec3(0, 4, 0), mat1);
+    scene.addTri(glm::vec3(2, 2, 0), glm::vec3(-4, 0, 0), glm::vec3(0, -4, 0), mat2);
     scene.addQuad(glm::vec3(3, 3, 1), glm::vec3(0, 0, 4), glm::vec3(0, 4, 0), mat2);
     scene.addQuad(glm::vec3(-2, 3, 1), glm::vec3(4, 0, 0), glm::vec3(0, 0, 4), mat3);
     scene.addQuad(glm::vec3(-2, -3, 5), glm::vec3(4, 0, 0), glm::vec3(0, 0, -4), mat4);
     world = BuildCpuWorld(scene);
-    // auto bvhRoot = std::make_shared<bvh_node>(world);
-    // world = hittable_list(bvhRoot);
+    auto bvhRoot = std::make_shared<bvh_node>(world);
+    world = hittable_list(bvhRoot);
 
     SceneCamera sceneCamera;
     sceneCamera.lookFrom = glm::vec3(0, 0, 9);
