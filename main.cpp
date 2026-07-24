@@ -4,9 +4,10 @@
 #include "CPURenderer/hittable.h"
 #include "CPURenderer/hittable_list.h"
 #include "CPURenderer/sphere.h"
+#include "CPURenderer/Quad.h"
 #include "CPURenderer/material.h"
 #include "CPURenderer/texture.h"
-#include "OpenGLRenderer/openglviewport.h"
+#include "OpenGLRenderer/EditorOpenGL.h"
 #include <chrono>
 #define STB_IMAGE_IMPLEMENTATION
 #include "external/stb_image.h"
@@ -87,12 +88,20 @@ hittable_list BuildCpuWorld(const Scene& scene)
     {
         world.add(
             std::make_shared<sphere>(
-                point3(
-                    source.center.x,
-                    source.center.y,
-                    source.center.z
-                ),
+                point3(source.center.x, source.center.y, source.center.z),
                 source.radius,
+                cpuMaterials[source.material]
+            )
+        );
+    }
+
+    for (const SceneQuad& source : scene.GetQuads())
+    {
+        world.add(
+            std::make_shared<quad>(
+                point3(source.Q.x,source.Q.y,source.Q.z),
+                vec3(source.u.x,source.u.y,source.u.z),
+                vec3(source.v.x,source.v.y,source.v.z),
                 cpuMaterials[source.material]
             )
         );
@@ -101,11 +110,49 @@ hittable_list BuildCpuWorld(const Scene& scene)
     return world;
 }
 
-void bouncing_spheres(
-    hittable_list& world,
-    Scene& scene
-)
-{
+void quads(hittable_list& world, Scene& scene) {
+    scene.Clear();
+    const MaterialId groundMaterial = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.5f, 0.5f, 0.5f));
+    const MaterialId mat1 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.2f, 1.0f, 0.2f));
+    const MaterialId mat2 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.2f, 0.2f, 1.0f));
+    const MaterialId mat3 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(1.0f, 0.5f, 0.0f));
+    const MaterialId mat4 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.2f, 0.8f, 0.8f));
+    scene.addQuad(glm::vec3(-3, -2, 5), glm::vec3(0, 0, -4), glm::vec3(0, 4, 0), groundMaterial);
+    scene.addQuad(glm::vec3(-2, -2, 0), glm::vec3(4, 0, 0), glm::vec3(0, 4, 0), mat1);
+    scene.addQuad(glm::vec3(3, 3, 1), glm::vec3(0, 0, 4), glm::vec3(0, 4, 0), mat2);
+    scene.addQuad(glm::vec3(-2, 3, 1), glm::vec3(4, 0, 0), glm::vec3(0, 0, 4), mat3);
+    scene.addQuad(glm::vec3(-2, -3, 5), glm::vec3(4, 0, 0), glm::vec3(0, 0, -4), mat4);
+    world = BuildCpuWorld(scene);
+    // auto bvhRoot = std::make_shared<bvh_node>(world);
+    // world = hittable_list(bvhRoot);
+
+    SceneCamera sceneCamera;
+    sceneCamera.lookFrom = glm::vec3(0, 0, 9);
+    sceneCamera.lookAt = glm::vec3(0, 0, 0);
+    sceneCamera.up = glm::vec3(0, 1, 0);
+    sceneCamera.verticalFovDegrees = 80.0f;
+    sceneCamera.defocusAngleDegrees = 0.0f;
+    sceneCamera.focusDistance = 10.0f;
+    scene.SetCamera(sceneCamera);
+    CPURenderer cpuRenderer;
+    camera cam = cpuRenderer.cam;
+    cam.aspect_ratio = 16.0 / 9.0;
+    cam.image_width = 640;
+    cam.samples_per_pixel = 50;
+    cam.max_depth = 8;
+
+    const SceneCamera& cameraData = scene.GetCamera();
+
+    cam.vfov = cameraData.verticalFovDegrees;
+    cam.lookfrom = point3(cameraData.lookFrom.x,cameraData.lookFrom.y,cameraData.lookFrom.z);
+    cam.lookat = point3(cameraData.lookAt.x,cameraData.lookAt.y,cameraData.lookAt.z);
+    cam.vup = vec3(cameraData.up.x,cameraData.up.y,cameraData.up.z);
+    cam.defocus_angle = cameraData.defocusAngleDegrees;
+    cam.focus_dist = cameraData.focusDistance;
+    cam.render(world);
+}
+
+void bouncing_spheres(hittable_list& world, Scene& scene) {
     /*
      * Prevent duplicate objects if this function is called more
      * than once with the same Scene.
@@ -290,7 +337,7 @@ void bouncing_spheres(
     Renderer(scene);
 
     const auto start =std::chrono::steady_clock::now();
-    cam.render(world);
+    // cam.render(world);
     const auto end =std::chrono::steady_clock::now();
     const auto elapsed =std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
@@ -442,10 +489,11 @@ int main() {
     // WORLD
     hittable_list world;
     Scene scene;
-    switch (1) {
+    switch (5) {
         case 1: bouncing_spheres(world, scene); break;
         // case 2: checkered_spheres(world, scene); break;
         // case 3: earth(world, scene); break;
         // case 4: perlin_spheres(world, scene); break;
+        case 5: quads(world, scene); break;
     }
 }

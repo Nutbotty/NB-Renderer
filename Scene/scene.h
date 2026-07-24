@@ -11,6 +11,7 @@
 
 using MaterialId = std::uint32_t;
 using SphereId = std::uint32_t;
+using QuadId = std::uint32_t;
 
 enum class MaterialType : std::uint32_t
 {
@@ -27,6 +28,12 @@ struct SceneMaterial {
 struct SceneSphere {
     glm::vec3 center{0.0f};
     float radius = 0.5f;
+    MaterialId material = 0;
+};
+struct SceneQuad {
+    glm::vec3 Q{0.0f, 0.0f, 0.0f};
+    glm::vec3 u{1.0f, 0.0f, 0.0f};
+    glm::vec3 v{0.0f, 1.0f, 0.0f};
     MaterialId material = 0;
 };
 struct SceneCamera {
@@ -65,6 +72,16 @@ public:
         MarkDirty();
         return id;
     }
+    QuadId addQuad(const glm::vec3& Q, const glm::vec3& u, const glm::vec3& v, MaterialId material) {
+        SceneQuad quad;
+        quad.Q = Q;
+        quad.u = u;
+        quad.v = v;
+        quad.material = material;
+        const auto id = static_cast<QuadId>(m_Quads.size());
+        m_Quads.push_back(quad);
+        return id;
+    }
     void SetCamera(const SceneCamera& camera) {
         m_Camera = camera;
         MarkDirty();
@@ -77,6 +94,10 @@ public:
     [[nodiscard]] const std::vector<SceneSphere>& GetSpheres() const
     {
         return m_Spheres;
+    }
+    [[nodiscard]] const std::vector<SceneQuad>& GetQuads() const
+    {
+        return m_Quads;
     }
     [[nodiscard]] const SceneCamera& GetCamera() const
     {
@@ -101,6 +122,7 @@ public:
 private:
     std::vector<SceneMaterial> m_Materials;
     std::vector<SceneSphere> m_Spheres;
+    std::vector<SceneQuad> m_Quads;
     SceneCamera m_Camera;
 
     bool m_Dirty = true;
