@@ -13,8 +13,8 @@
 
 namespace {
 // settings
-const unsigned int SCR_WIDTH = 1920;
-const unsigned int SCR_HEIGHT = 1080;
+const unsigned int SCR_WIDTH = 2560;
+const unsigned int SCR_HEIGHT = 1440;
 bool TRACE = true;
 
 constexpr GLuint MaterialBufferBinding = 1;
@@ -128,6 +128,91 @@ GLuint CreateStorageBuffer(
 
     return buffer;
 }
+
+    struct CameraState
+{
+    glm::vec3 Position{0.0f};
+    glm::vec3 Front{0.0f};
+    glm::vec3 Up{0.0f};
+
+    float Zoom = 0.0f;
+    float FocusDistance = 0.0f;
+    float DefocusAngle = 0.0f;
+};
+
+    CameraState CaptureCameraState(
+        const EditorCamera& editorCamera
+    )
+    {
+        CameraState state;
+
+        state.Position =
+            editorCamera.Position;
+
+        state.Front =
+            editorCamera.Front;
+
+        state.Up =
+            editorCamera.Up;
+
+        state.Zoom =
+            editorCamera.Zoom;
+
+        state.FocusDistance =
+            editorCamera.FocusDistance;
+
+        state.DefocusAngle =
+            editorCamera.DefocusAngle;
+
+        return state;
+    }
+
+    bool NearlyEqual(
+        const glm::vec3& left,
+        const glm::vec3& right,
+        float epsilon = 1e-5f
+    )
+    {
+        const glm::vec3 difference =
+            left - right;
+
+        return glm::dot(
+            difference,
+            difference
+        ) <= epsilon * epsilon;
+    }
+
+    bool NearlyEqual(
+        float left,
+        float right,
+        float epsilon = 1e-5f
+    )
+    {
+        return std::abs(
+            left - right
+        ) <= epsilon;
+    }
+
+    bool CameraStateChanged(
+        const CameraState& previous,
+        const CameraState& current
+    )
+    {
+        return
+            !NearlyEqual(previous.Position, current.Position) ||
+            !NearlyEqual(previous.Front, current.Front) ||
+            !NearlyEqual(previous.Up, current.Up) ||
+            !NearlyEqual(previous.Zoom, current.Zoom) ||
+            !NearlyEqual(
+                previous.FocusDistance,
+                current.FocusDistance
+            ) ||
+            !NearlyEqual(
+                previous.DefocusAngle,
+                current.DefocusAngle
+            );
+    }
+
 }
 
 EditorCamera viewport(const Scene& scene) {
@@ -262,7 +347,21 @@ EditorCamera viewport(const Scene& scene) {
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glBindImageTexture(0,outputTexture,0,GL_FALSE,0,GL_WRITE_ONLY,GL_RGBA32F);
+    glBindImageTexture(0,outputTexture,0,GL_FALSE,0,GL_READ_WRITE,GL_RGBA32F);
+
+    fullscreenShader.use();
+    fullscreenShader.setInt("outputTexture", 0);
+    std::uint32_t accumulationFrame =
+    0;
+
+    CameraState previousCameraState =
+        CaptureCameraState(camera);
+
+    bool previousTraceMode =
+        TRACE;
+
+    constexpr std::uint32_t MaxAccumulationFrames =
+        4096 * 4;
 
     while (!window.ShouldClose())
     {
@@ -274,30 +373,94 @@ EditorCamera viewport(const Scene& scene) {
         // input
         // -----
         input.Update(deltaTime);
+        /*
+     * Detect changes before dispatching.
+     */
+        const CameraState currentCameraState =
+            CaptureCameraState(camera);
+
+        const bool cameraChanged =
+            CameraStateChanged(
+                previousCameraState,
+                currentCameraState
+            );
+
+        const bool traceModeChanged =
+            TRACE != previousTraceMode;
+
+        if (cameraChanged || traceModeChanged)
+        {
+            accumulationFrame = 0;
+        }
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         if (TRACE) {
+            glDisable(GL_DEPTH_TEST);
+            if (accumulationFrame< MaxAccumulationFrames) {
+                computeShader.use();
+                glBindBufferBase(
+                GL_SHADER_STORAGE_BUFFER,
+                MaterialBufferBinding,
+                materialBuffer
+            );
 
-            computeShader.use();
-            computeShader.setInt("uBvhNodeCount", static_cast<int>(gpuBvhNodes.size()));
-            computeShader.setVec3("uCameraLookFrom",camera.Position);
-            computeShader.setVec3("uCameraLookAt",camera.Position + camera.Front);
-            computeShader.setVec3("uCameraVUp",camera.Up);
-            computeShader.setFloat("uCameraVerticalFov",camera.Zoom);
-            computeShader.setFloat("uCameraFocusDistance", camera.FocusDistance);
-            computeShader.setFloat("uCameraDefocusAngle", camera.DefocusAngle);
+                glBindBufferBase(
+                    GL_SHADER_STORAGE_BUFFER,
+                    SphereBufferBinding,
+                    sphereBuffer
+                );
 
-            glDispatchCompute(groupCountX, groupCountY, 1);
+                glBindBufferBase(
+                    GL_SHADER_STORAGE_BUFFER,
+                    BvhBufferBinding,
+                    bvhBuffer
+                );
 
-            glMemoryBarrier(
-                GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
-                GL_TEXTURE_FETCH_BARRIER_BIT);
+                glBindImageTexture(
+                    0,
+                    outputTexture,
+                    0,
+                    GL_FALSE,
+                    0,
+                    GL_READ_WRITE,
+                    GL_RGBA32F
+                );
+                computeShader.setUInt("uFrameIndex", accumulationFrame);
+                computeShader.setInt("uBvhNodeCount", static_cast<int>(gpuBvhNodes.size()));
+                computeShader.setVec3("uCameraLookFrom",camera.Position);
+                computeShader.setVec3("uCameraLookAt",camera.Position + camera.Front);
+                computeShader.setVec3("uCameraVUp",camera.Up);
+                computeShader.setFloat("uCameraVerticalFov",camera.Zoom);
+                computeShader.setFloat("uCameraFocusDistance", camera.FocusDistance);
+                computeShader.setFloat("uCameraDefocusAngle", camera.DefocusAngle);
 
+                glDispatchCompute(groupCountX, groupCountY, 1);
+
+                glMemoryBarrier(
+                    GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
+                    GL_TEXTURE_FETCH_BARRIER_BIT);
+
+                ++accumulationFrame;
+            }
             fullscreenShader.use();
-            fullscreenShader.setInt("outputTexture", 0);
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, outputTexture);
             glBindVertexArray(fullscreenVAO);
             glDrawArrays(GL_TRIANGLES,0,3);
+            const CameraState currentCameraState =
+            CaptureCameraState(camera);
+
+            const bool cameraChanged =
+                CameraStateChanged(
+                    previousCameraState,
+                    currentCameraState
+                );
+
+            const bool traceModeChanged =
+                TRACE != previousTraceMode;
+            if (cameraChanged || traceModeChanged)
+            {
+                accumulationFrame = 0;
+            }
         }
         else if (!TRACE) {
             // render
@@ -336,6 +499,11 @@ EditorCamera viewport(const Scene& scene) {
                 glDrawArrays(GL_TRIANGLES, 0, 3);;
             }
         }
+        previousCameraState =
+        currentCameraState;
+
+        previousTraceMode =
+            TRACE;
         window.SwapBuffers();
         window.PollEvents();
     }

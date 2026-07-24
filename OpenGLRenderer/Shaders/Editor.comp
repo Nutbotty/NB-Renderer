@@ -1,7 +1,7 @@
 #version 430 core
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
-layout(rgba32f, binding = 0 ) uniform writeonly image2D outputImage;
+layout(rgba32f, binding = 0 ) uniform image2D outputImage;
 struct PackedMaterial {
     vec4 albedoFuzz;
     vec4 optical;
@@ -28,10 +28,6 @@ layout(std430, binding = 2) readonly buffer SphereBuffer {
 layout(std430, binding = 3) readonly buffer BvhNodeBuffer {
     PackedBvhNode bvhNodeBuffer[];
 };
-uint sphereTestCount = 0u;
-uint aabbTestCount = 0u;
-
-
 
 uniform int uBvhNodeCount;
 uniform vec3 uCameraLookFrom;
@@ -42,9 +38,12 @@ uniform float uCameraVerticalFov;
 uniform float uCameraFocusDistance;
 uniform float uCameraDefocusAngle;
 
+uniform uint uFrameIndex;
+
 const float MAX_RAY_DISTANCE = 1e30;
 const int SAMPLES_PER_PIXEL = 5;
-const int MAX_DEPTH = 4;
+const int SAMPLES_PER_DISPATCH = 1;
+const int MAX_DEPTH = 8;
 const int BVH_STACK_SIZE = 32;
 /*
  * Structs
@@ -356,7 +355,6 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
                 int sphereIndex = firstSphere + sphereOffset;
 
                 Sphere sphere = loadSphere(sphereIndex);
-                ++sphereTestCount;
                 if (hitSphere(sphere, ray, Interval(rayT.min, closestSoFar), temporaryRecord)) {
                     hitAnything = true;
                     closestSoFar = temporaryRecord.t;
@@ -381,7 +379,6 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
 
         float leftEntryT;
         float rightEntryT;
-        ++aabbTestCount;
         bool hitLeft =
         hitAabb(
                 leftNode,
@@ -391,7 +388,6 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
                 closestSoFar,
                 leftEntryT
         );
-        +aabbTestCount;
         bool hitRight =
         hitAabb(
                 rightNode,
@@ -562,24 +558,30 @@ void main() {
     /*
  * Seed this invocation's random stream.
  */
-    uint pixelIndex =
-    uint(pixel.x)
-    + uint(pixel.y)
-    * uint(imageDimensions.x);
-    rngState =
-    pcgHash(pixelIndex + 1u);
+    uint pixelIndex = uint(pixel.x) + uint(pixel.y) * uint(imageDimensions.x);
+    rngState = pcgHash(pcgHash(pixelIndex + 1u) ^ pcgHash(uFrameIndex + 1u));
 
     //    Camera camera;
-    Camera camera =
-    makeCamera(imageDimensions);
+    Camera camera = makeCamera(imageDimensions);
 
     vec3 color = vec3(0.0);
 
-    for (int sampleIndex = 0; sampleIndex < SAMPLES_PER_PIXEL; ++sampleIndex) {
+    for (int sampleIndex = 0; sampleIndex < SAMPLES_PER_DISPATCH; ++sampleIndex) {
         Ray ray = getCameraRay(camera, pixel);
         color += rayColor(ray);
     }
-    vec3 finalColor = color / float(SAMPLES_PER_PIXEL);
-    finalColor = sqrt(max(finalColor, vec3(0.0)));
-    imageStore(outputImage, pixel, vec4(finalColor, 1.0));
+
+    vec3 currentColor = color / float(SAMPLES_PER_DISPATCH);
+
+    vec3 accumulatedAverageColor;
+
+    if (uFrameIndex == 0u) {
+        accumulatedAverageColor = currentColor;
+    } else {
+        vec3 previousAverageColor = imageLoad(outputImage, pixel).rgb;
+        float previousFrameCount = float(uFrameIndex);
+        accumulatedAverageColor = (previousAverageColor * previousFrameCount + currentColor) / (previousFrameCount + 1.0);
+    }
+//    finalColor = sqrt(max(finalColor, vec3(0.0)));
+    imageStore(outputImage, pixel, vec4(accumulatedAverageColor, 1.0));
 }
