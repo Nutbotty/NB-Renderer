@@ -7,11 +7,16 @@ struct PackedMaterial {
     vec4 optical;
     ivec4 metadata;
 };
-
 struct PackedSphere {
     vec4 centerRadius;
     ivec4 metadata;
 };
+struct PackedBvhNode {
+    vec4 boundsMin;
+    vec4 boundsMax;
+    ivec4 metadata;
+};
+
 
 layout(std430, binding = 1) readonly buffer MaterialBuffer {
     PackedMaterial materialBuffer[];
@@ -20,8 +25,15 @@ layout(std430, binding = 1) readonly buffer MaterialBuffer {
 layout(std430, binding = 2) readonly buffer SphereBuffer {
     PackedSphere sphereBuffer[];
 };
+layout(std430, binding = 3) readonly buffer BvhNodeBuffer {
+    PackedBvhNode bvhNodeBuffer[];
+};
+uint sphereTestCount = 0u;
+uint aabbTestCount = 0u;
 
 
+
+uniform int uBvhNodeCount;
 uniform vec3 uCameraLookFrom;
 uniform vec3 uCameraLookAt;
 uniform vec3 uCameraVUp;
@@ -31,8 +43,9 @@ uniform float uCameraFocusDistance;
 uniform float uCameraDefocusAngle;
 
 const float MAX_RAY_DISTANCE = 1e30;
-const int SAMPLES_PER_PIXEL = 50;
-const int MAX_DEPTH = 10;
+const int SAMPLES_PER_PIXEL = 200;
+const int MAX_DEPTH = 16;
+const int BVH_STACK_SIZE = 32;
 /*
  * Structs
  */
@@ -297,18 +310,131 @@ bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     record.material = sphere.material;
     return true;
 }
-bool hitWorld(Ray r, Interval rT, out HitRecord record) {
-    HitRecord tempRecord;
+bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, float rayTMax, out float entryT) {
+    vec3 t0 = (node.boundsMin.xyz - ray.origin) * inverseDirection;
+    vec3 t1 = (node.boundsMax.xyz - ray.origin) * inverseDirection;
+    vec3 nearT = min(t0, t1);
+    vec3 farT = max(t0, t1);
+    float currentMin = max(rayTMin, max(nearT.x, max(nearT.y, nearT.z)));
+    float currentMax = min(rayTMax, min(farT.x, min(farT.y, farT.z)));
+    entryT = currentMin;
+    return currentMax >= currentMin;
+}
+
+bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
+    if (uBvhNodeCount <= 0) {
+        return false;
+    }
     bool hitAnything = false;
-    float closestSoFar = rT.max;
-    int sphereCount = sphereBuffer.length();
-    for (int i = 0; i < sphereCount; ++i) {
-        Sphere sphere = loadSphere(i);
-        Interval currentInterval = Interval(rT.min, closestSoFar);
-        if (hitSphere(sphere, r, currentInterval, tempRecord)) {
-            hitAnything = true;
-            closestSoFar = tempRecord.t;
-            record = tempRecord;
+    float closestSoFar = rayT.max;
+    HitRecord temporaryRecord;
+    float rootEntryT;
+    vec3 inverseDirection = 1.0 / ray.direction;
+    if (!hitAabb(bvhNodeBuffer[0], ray, inverseDirection, rayT.min, closestSoFar, rootEntryT)) {
+        return false;
+    }
+
+    int stack[BVH_STACK_SIZE];
+    int stackSize = 0;
+    stack[stackSize++] = 0;
+
+    while (stackSize > 0) {
+        int nodeIndex =
+        stack[--stackSize];
+
+        PackedBvhNode node =
+        bvhNodeBuffer[nodeIndex];
+
+        bool isLeaf = node.metadata.z != 0;
+
+        if (isLeaf)
+        {
+            int firstSphere = node.metadata.x;
+            int sphereCount = node.metadata.y;
+
+            for (int sphereOffset = 0; sphereOffset < sphereCount; ++sphereOffset) {
+                int sphereIndex = firstSphere + sphereOffset;
+
+                Sphere sphere = loadSphere(sphereIndex);
+                ++sphereTestCount;
+                if (hitSphere(sphere, ray, Interval(rayT.min, closestSoFar), temporaryRecord)) {
+                    hitAnything = true;
+                    closestSoFar = temporaryRecord.t;
+                    record = temporaryRecord;
+                }
+            }
+
+            continue;
+        }
+
+        int leftChild =
+        node.metadata.x;
+
+        int rightChild =
+        node.metadata.y;
+
+        PackedBvhNode leftNode =
+        bvhNodeBuffer[leftChild];
+
+        PackedBvhNode rightNode =
+        bvhNodeBuffer[rightChild];
+
+        float leftEntryT;
+        float rightEntryT;
+        ++aabbTestCount;
+        bool hitLeft =
+        hitAabb(
+                leftNode,
+                ray,
+                inverseDirection,
+                rayT.min,
+                closestSoFar,
+                leftEntryT
+        );
+        +aabbTestCount;
+        bool hitRight =
+        hitAabb(
+                rightNode,
+                ray,
+                inverseDirection,
+                rayT.min,
+                closestSoFar,
+                rightEntryT
+        );
+
+        /*
+         * Push the farther child first because the stack is LIFO.
+         * The nearer child is therefore processed first, which may
+         * reduce closestSoFar before the farther child is visited.
+         */
+        if (hitLeft && hitRight)
+        {
+            if (leftEntryT < rightEntryT)
+            {
+                stack[stackSize++] =
+                rightChild;
+
+                stack[stackSize++] =
+                leftChild;
+            }
+            else
+            {
+                stack[stackSize++] =
+                leftChild;
+
+                stack[stackSize++] =
+                rightChild;
+            }
+        }
+        else if (hitLeft)
+        {
+            stack[stackSize++] =
+            leftChild;
+        }
+        else if (hitRight)
+        {
+            stack[stackSize++] =
+            rightChild;
         }
     }
     return hitAnything;
@@ -405,49 +531,22 @@ vec3 defocusDiskSample(Camera camera)
     + p.y * camera.defocus_disc_v;
 }
 
-Ray getCameraRay(
-        Camera camera,
-        ivec2 pixel
-)
+Ray getCameraRay(Camera camera, ivec2 pixel)
 {
-    /*
-     * pixel00Loc is already the center of pixel (0, 0),
-     * so sampleSquare() is added directly to the integer
-     * pixel coordinates.
-     */
-    vec2 offset =
-    sampleSquare();
-
-    vec3 pixelSample =
-    camera.pixel00_loc
-    + (
-    float(pixel.x) + offset.x
-    ) * camera.pixel_delta_u
-    + (
-    float(pixel.y) + offset.y
-    ) * camera.pixel_delta_v;
+    vec2 offset = sampleSquare();
+    vec3 pixelSample = camera.pixel00_loc + (float(pixel.x) + offset.x)
+    * camera.pixel_delta_u + (float(pixel.y) + offset.y) * camera.pixel_delta_v;
 
     vec3 rayOrigin;
-
-    if (uCameraDefocusAngle <= 0.0)
-    {
-        rayOrigin =
-        camera.center;
-    }
-    else
-    {
-        rayOrigin =
-        defocusDiskSample(camera);
+    if (uCameraDefocusAngle <= 0.0) {
+        rayOrigin = camera.center;
+    } else {
+        rayOrigin = defocusDiskSample(camera);
     }
 
     Ray ray;
-
-    ray.origin =
-    rayOrigin;
-
-    ray.direction =
-    pixelSample - rayOrigin;
-
+    ray.origin = rayOrigin;
+    ray.direction = pixelSample - rayOrigin;
     return ray;
 }
 /*

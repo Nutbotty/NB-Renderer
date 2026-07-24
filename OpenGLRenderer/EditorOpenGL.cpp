@@ -9,6 +9,7 @@
 #include "../external/glm/glm/gtc/matrix_transform.hpp"
 #include "Window.h"
 #include "Input.h"
+#include "BvhBuilder.h"
 
 namespace {
 // settings
@@ -18,30 +19,11 @@ bool TRACE = true;
 
 constexpr GLuint MaterialBufferBinding = 1;
 constexpr GLuint SphereBufferBinding = 2;
+    constexpr GLuint BvhBufferBinding = 3;
 constexpr unsigned int ComputeLocalSizeX = 16;
 constexpr unsigned int ComputeLocalSizeY = 16;
 const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
 const GLuint groupCountY = (SCR_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
-struct alignas(16) GpuMaterial {
-    glm::vec4 AlbedoFuzz{0.0f};
-    glm::vec4 Optical{0.0f};
-    glm::ivec4 Metadata{0};
-};
-
-struct alignas(16) GpuSphere {
-    glm::vec4 CenterRadius{0.0f};
-    glm::ivec4 Metadata{0};
-};
-
-static_assert(
-    sizeof(GpuMaterial) == 48,
-    "GpuMaterial layout does not match GLSL"
-);
-
-static_assert(
-    sizeof(GpuSphere) == 32,
-    "GpuSphere layout does not match GLSL"
-);
 
 // camera
 EditorCamera camera(
@@ -107,41 +89,7 @@ BuildGpuMaterials(const Scene& scene)
 
     return result;
 }
-std::vector<GpuSphere>
-BuildGpuSpheres(const Scene& scene)
-{
-    std::vector<GpuSphere> result;
 
-    result.reserve(
-        scene.GetSpheres().size()
-    );
-
-    for (
-        const SceneSphere& sphere :
-        scene.GetSpheres()
-    )
-    {
-        GpuSphere gpuSphere;
-
-        gpuSphere.CenterRadius =
-            glm::vec4(
-                sphere.center,
-                sphere.radius
-            );
-
-        gpuSphere.Metadata =
-            glm::ivec4(
-                static_cast<int>(sphere.material),
-                0,
-                0,
-                0
-            );
-
-        result.push_back(gpuSphere);
-    }
-
-    return result;
-}
 GLuint CreateStorageBuffer(
     GLuint binding,
     const void* data,
@@ -183,12 +131,10 @@ GLuint CreateStorageBuffer(
 }
 
 EditorCamera viewport(const Scene& scene) {
-
-    const std::vector<GpuMaterial> gpuMaterials =
-    BuildGpuMaterials(scene);
-
-    const std::vector<GpuSphere> gpuSpheres =
-        BuildGpuSpheres(scene);
+    const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
+    const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
+    const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
+    const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.Nodes;
 
     Window window(SCR_WIDTH, SCR_HEIGHT, "Viewport");
 
@@ -214,6 +160,15 @@ EditorCamera viewport(const Scene& scene) {
         SphereBufferBinding,
         gpuSpheres.data(),
         gpuSpheres.size() * sizeof(GpuSphere));
+    const GLuint bvhBuffer =
+        CreateStorageBuffer(
+            BvhBufferBinding,
+            gpuBvhNodes.data(),
+            static_cast<GLsizeiptr>(
+                gpuBvhNodes.size()
+                * sizeof(GpuBvhNode)
+            )
+        );
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -298,38 +253,13 @@ EditorCamera viewport(const Scene& scene) {
     glGenTextures(1, &outputTexture);
     glBindTexture(GL_TEXTURE_2D, outputTexture);
     glGenVertexArrays(1, &fullscreenVAO);
-    glTexStorage2D(
-    GL_TEXTURE_2D,
-    1,
-    GL_RGBA32F,
-    SCR_WIDTH,
-    SCR_HEIGHT
-);
 
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MIN_FILTER,
-        GL_NEAREST
-    );
 
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MAG_FILTER,
-        GL_NEAREST
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_S,
-        GL_CLAMP_TO_EDGE
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_T,
-        GL_CLAMP_TO_EDGE
-    );
-
+    glTexStorage2D(GL_TEXTURE_2D, 1,GL_RGBA32F, SCR_WIDTH, SCR_HEIGHT);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     glBindImageTexture(0,outputTexture,0,GL_FALSE,0,GL_WRITE_ONLY,GL_RGBA32F);
@@ -348,6 +278,7 @@ EditorCamera viewport(const Scene& scene) {
         if (TRACE) {
 
             computeShader.use();
+            computeShader.setInt("uBvhNodeCount", static_cast<int>(gpuBvhNodes.size()));
             computeShader.setVec3("uCameraLookFrom",camera.Position);
             computeShader.setVec3("uCameraLookAt",camera.Position + camera.Front);
             computeShader.setVec3("uCameraVUp",camera.Up);
@@ -402,7 +333,7 @@ EditorCamera viewport(const Scene& scene) {
                 ourShader.setMat4("model",model);
                 const SceneMaterial& material = materials[sphere.material];
                 ourShader.setVec3("objectColor",material.albedo);
-                glDrawElements(GL_TRIANGLES, 60, GL_UNSIGNED_INT, 0);
+                glDrawArrays(GL_TRIANGLES, 0, 3);;
             }
         }
         window.SwapBuffers();

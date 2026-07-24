@@ -5,124 +5,66 @@
 #include "Shaders/shader.h"
 #include "Window.h"
 #include <iostream>
+#include <algorithm>
+#include <limits>
+#include <vector>
+#include "BvhBuilder.h"
 
-namespace
-{
-    constexpr int RenderWidth = 640;
-    constexpr int RenderHeight = 360;
+namespace {
+    constexpr int RenderWidth = 2560;
+    constexpr int RenderHeight = 1440;
 
     constexpr unsigned int ComputeLocalSizeX = 16;
     constexpr unsigned int ComputeLocalSizeY = 16;
 
     constexpr GLuint MaterialBufferBinding = 1;
     constexpr GLuint SphereBufferBinding = 2;
+    constexpr GLuint BvhBufferBinding = 3;
 
-    struct alignas(16) GpuMaterial {
-        glm::vec4 AlbedoFuzz{0.0f};
-        glm::vec4 Optical{0.0f};
-        glm::ivec4 Metadata{0};
-    };
-
-    struct alignas(16) GpuSphere {
-        glm::vec4 CenterRadius{0.0f};
-        glm::ivec4 Metadata{0};
-    };
-
-    static_assert(
-        sizeof(GpuMaterial) == 48,
-        "GpuMaterial layout does not match GLSL"
-    );
-
-    static_assert(
-        sizeof(GpuSphere) == 32,
-        "GpuSphere layout does not match GLSL"
-    );
+    /*
+     * best results with size 4 so far, 8 good too
+     */
+    constexpr std::uint32_t BvhLeafSize = 8;
 }
 
 std::vector<GpuMaterial>
-BuildGpuMaterials(const Scene& scene)
-{
+BuildGpuMaterials(const Scene &scene) {
     std::vector<GpuMaterial> result;
 
-    result.reserve(
-        scene.GetMaterials().size()
-    );
+    result.reserve(scene.GetMaterials().size());
 
-    for (
-        const SceneMaterial& material :
-        scene.GetMaterials()
-    )
-    {
+    for (const SceneMaterial &material: scene.GetMaterials()) {
         GpuMaterial gpuMaterial;
 
         gpuMaterial.AlbedoFuzz =
-            glm::vec4(
-                material.albedo,
-                material.fuzz
-            );
+                glm::vec4(
+                    material.albedo,
+                    material.fuzz
+                );
 
         gpuMaterial.Optical =
-            glm::vec4(
-                material.indexOfRefraction,
-                0.0f,
-                0.0f,
-                0.0f
-            );
+                glm::vec4(
+                    material.indexOfRefraction,
+                    0.0f,
+                    0.0f,
+                    0.0f
+                );
 
         gpuMaterial.Metadata =
-            glm::ivec4(
-                static_cast<int>(material.type),
-                0,
-                0,
-                0
-            );
+                glm::ivec4(
+                    static_cast<int>(material.type),
+                    0,
+                    0,
+                    0
+                );
 
         result.push_back(gpuMaterial);
     }
 
     return result;
 }
-std::vector<GpuSphere>
-BuildGpuSpheres(const Scene& scene)
-{
-    std::vector<GpuSphere> result;
 
-    result.reserve(
-        scene.GetSpheres().size()
-    );
-
-    for (
-        const SceneSphere& sphere :
-        scene.GetSpheres()
-    )
-    {
-        GpuSphere gpuSphere;
-
-        gpuSphere.CenterRadius =
-            glm::vec4(
-                sphere.center,
-                sphere.radius
-            );
-
-        gpuSphere.Metadata =
-            glm::ivec4(
-                static_cast<int>(sphere.material),
-                0,
-                0,
-                0
-            );
-
-        result.push_back(gpuSphere);
-    }
-
-    return result;
-}
-GLuint CreateStorageBuffer(
-    GLuint binding,
-    const void* data,
-    GLsizeiptr size
-)
-{
+GLuint CreateStorageBuffer(GLuint binding, const void *data, GLsizeiptr size) {
     GLuint buffer = 0;
 
     glGenBuffers(
@@ -156,15 +98,11 @@ GLuint CreateStorageBuffer(
     return buffer;
 }
 
-int Renderer(const Scene& scene)
-{
-    // The scene is not needed for this first compute-shader test.
-    // (void)scene;
-    const std::vector<GpuMaterial> gpuMaterials =
-    BuildGpuMaterials(scene);
-
-    const std::vector<GpuSphere> gpuSpheres =
-        BuildGpuSpheres(scene);
+int Renderer(const Scene &scene) {
+    const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
+    const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
+    const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
+    const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.Nodes;
 
     Window window(RenderWidth, RenderHeight, "Viewport");
 
@@ -172,23 +110,32 @@ int Renderer(const Scene& scene)
         return -1;
 
     Shader computeShader("OpenGLRenderer/Shaders/render.comp");
-    Shader fullscreenShader("OpenGLRenderer/Shaders/render.vs","OpenGLRenderer/Shaders/render.fs");
+    Shader fullscreenShader("OpenGLRenderer/Shaders/render.vs", "OpenGLRenderer/Shaders/render.fs");
     const GLuint materialBuffer = CreateStorageBuffer(
-            MaterialBufferBinding,
-            gpuMaterials.data(),
-            static_cast<GLsizeiptr>(
-                gpuMaterials.size()
-                * sizeof(GpuMaterial)
-            )
-        );
+        MaterialBufferBinding,
+        gpuMaterials.data(),
+        static_cast<GLsizeiptr>(
+            gpuMaterials.size()
+            * sizeof(GpuMaterial)
+        )
+    );
     const GLuint sphereBuffer = CreateStorageBuffer(
-            SphereBufferBinding,
-            gpuSpheres.data(),
-            static_cast<GLsizeiptr>(
-                gpuSpheres.size()
-                * sizeof(GpuSphere)
-            )
-        );
+        SphereBufferBinding,
+        gpuSpheres.data(),
+        static_cast<GLsizeiptr>(
+            gpuSpheres.size()
+            * sizeof(GpuSphere)
+        )
+    );
+    const GLuint bvhBuffer =
+            CreateStorageBuffer(
+                BvhBufferBinding,
+                gpuBvhNodes.data(),
+                static_cast<GLsizeiptr>(
+                    gpuBvhNodes.size()
+                    * sizeof(GpuBvhNode)
+                )
+            );
     /*
      * Create the texture that the compute shader will write into.
      */
@@ -196,69 +143,52 @@ int Renderer(const Scene& scene)
 
     glGenTextures(1, &outputTexture);
     glBindTexture(GL_TEXTURE_2D, outputTexture);
-
-    glTexStorage2D(
-        GL_TEXTURE_2D,
-        1,
-        GL_RGBA32F,
-        RenderWidth,
-        RenderHeight
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MIN_FILTER,
-        GL_NEAREST
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MAG_FILTER,
-        GL_NEAREST
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_S,
-        GL_CLAMP_TO_EDGE
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_T,
-        GL_CLAMP_TO_EDGE
-    );
-
+    glTexStorage2D(GL_TEXTURE_2D, 1,GL_RGBA32F, RenderWidth, RenderHeight);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    glBindImageTexture(0,outputTexture,0,GL_FALSE,0,GL_WRITE_ONLY,GL_RGBA32F);
+    glBindImageTexture(0, outputTexture, 0,GL_FALSE, 0,GL_WRITE_ONLY,GL_RGBA32F);
 
     const GLuint groupCountX = (RenderWidth + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
-    const GLuint groupCountY = (RenderHeight + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
+    const GLuint groupCountY = (RenderHeight + ComputeLocalSizeY - 1) / ComputeLocalSizeY;
 
+    GLuint timerQuery = 0;
+    glGenQueries(1, &timerQuery);
+
+    const SceneCamera &camera = scene.GetCamera();
     computeShader.use();
-    const SceneCamera& camera = scene.GetCamera();
-    computeShader.setVec3("uCameraLookFrom",camera.lookFrom);
-    computeShader.setVec3("uCameraLookAt",camera.lookAt);
-    computeShader.setVec3("uCameraVUp",camera.up);
-    computeShader.setFloat("uCameraVerticalFov",camera.verticalFovDegrees);
-    computeShader.setFloat("uCameraFocusDistance",camera.focusDistance);
-    computeShader.setFloat("uCameraDefocusAngle",camera.defocusAngleDegrees);
+    computeShader.setInt("uBvhNodeCount", static_cast<int>(gpuBvhNodes.size()));
+    computeShader.setVec3("uCameraLookFrom", camera.lookFrom);
+    computeShader.setVec3("uCameraLookAt", camera.lookAt);
+    computeShader.setVec3("uCameraVUp", camera.up);
+    computeShader.setFloat("uCameraVerticalFov", camera.verticalFovDegrees);
+    computeShader.setFloat("uCameraFocusDistance", camera.focusDistance);
+    computeShader.setFloat("uCameraDefocusAngle", camera.defocusAngleDegrees);
 
-    glDispatchCompute(groupCountX,groupCountY,1);
+
+    glDispatchCompute(groupCountX, groupCountY, 1);
+
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+
+    glFinish();
 
     /*
-     * Ensure that the image writes performed by the compute shader are
-     * visible when the texture is sampled by the fragment shader.
+     * Measure only GPU execution.
      */
-    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |GL_TEXTURE_FETCH_BARRIER_BIT);
+    glBeginQuery(GL_TIME_ELAPSED, timerQuery);
+    glDispatchCompute(groupCountX, groupCountY, 1);
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+    glEndQuery(GL_TIME_ELAPSED);
+    GLuint64 elapsedNanoseconds = 0;
+    glGetQueryObjectui64v(timerQuery,GL_QUERY_RESULT, &elapsedNanoseconds);
+    const double elapsedMilliseconds = static_cast<double>(elapsedNanoseconds) / 1'000'000.0;
+    std::cerr << "Compute time: " << elapsedMilliseconds << " ms\n";
+    glDeleteQueries(1, &timerQuery);
 
-    /*
-     * A VAO is required in the OpenGL core profile, even though the
-     * fullscreen triangle does not use a vertex buffer.
-     *
-     * Its vertices are generated using gl_VertexID.
-     */
+    glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
     GLuint fullscreenVAO = 0;
     glGenVertexArrays(1, &fullscreenVAO);
 
@@ -266,8 +196,8 @@ int Renderer(const Scene& scene)
     fullscreenShader.setInt("outputTexture", 0);
     std::cerr << "Compute program: " << computeShader.ID << '\n';
     std::cerr << "Fullscreen program: " << fullscreenShader.ID << '\n';
-    std::cerr << "Compute valid: "<< glIsProgram(computeShader.ID)<< '\n';
-    std::cerr << "Fullscreen valid: "<< glIsProgram(fullscreenShader.ID)<< '\n';
+    std::cerr << "Compute valid: " << glIsProgram(computeShader.ID) << '\n';
+    std::cerr << "Fullscreen valid: " << glIsProgram(fullscreenShader.ID) << '\n';
 
     while (!window.ShouldClose()) {
         glfwPollEvents();
@@ -276,15 +206,15 @@ int Renderer(const Scene& scene)
         int framebufferHeight = 0;
 
         glfwGetFramebufferSize(window.GetNativeWindow(), &framebufferWidth, &framebufferHeight);
-        glViewport(0,0, framebufferWidth, framebufferHeight);
-        glClearColor(0.0f,0.0f,0.0f,1.0f);
+        glViewport(0, 0, framebufferWidth, framebufferHeight);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
         glClear(GL_COLOR_BUFFER_BIT);
 
         fullscreenShader.use();
 
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D,outputTexture);
+        glBindTexture(GL_TEXTURE_2D, outputTexture);
 
         glBindVertexArray(fullscreenVAO);
         glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -296,6 +226,7 @@ int Renderer(const Scene& scene)
     glDeleteTextures(1, &outputTexture);
     glDeleteBuffers(1, &materialBuffer);
     glDeleteBuffers(1, &sphereBuffer);
+    glDeleteBuffers(1, &bvhBuffer);
     glDeleteProgram(computeShader.ID);
     glDeleteProgram(fullscreenShader.ID);
     glfwDestroyWindow(window.GetNativeWindow());
