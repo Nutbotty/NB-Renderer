@@ -41,8 +41,8 @@ struct alignas(16) GpuQuad {
 
 struct alignas(16) GpuTri {
     glm::vec4 Q{0.0f};
-    glm::vec4 u{0.0f};
-    glm::vec4 v{0.0f};
+    glm::vec4 U{0.0f};
+    glm::vec4 V{0.0f};
     glm::ivec4 Metadata{0};
 };
 
