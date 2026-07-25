@@ -39,8 +39,8 @@ struct SceneQuad {
 };
 struct SceneTri {
     glm::vec3 Q{0.0f, 0.0f, 0.0f};
-    glm::vec3 u{1.0f, 0.0f, 0.0f};
-    glm::vec3 v{0.0f, 1.0f, 0.0f};
+    glm::vec3 U{1.0f, 0.0f, 0.0f};
+    glm::vec3 V{0.0f, 1.0f, 0.0f};
     MaterialId material = 0;
 };
 struct SceneCamera {
@@ -89,11 +89,11 @@ public:
         m_Quads.push_back(quad);
         return id;
     }
-    TriId addTri(const glm::vec3& Q, const glm::vec3& u, const glm::vec3& v, MaterialId material) {
+    TriId addTri(const glm::vec3& Q, const glm::vec3& U, const glm::vec3& V, MaterialId material) {
         SceneTri tri;
         tri.Q = Q;
-        tri.u = u;
-        tri.v = v;
+        tri.U = U;
+        tri.V = V;
         tri.material = material;
         const auto id = static_cast<TriId>(m_Tris.size());
         m_Tris.push_back(tri);
