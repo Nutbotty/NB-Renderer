@@ -19,7 +19,10 @@ bool TRACE = true;
 
 constexpr GLuint MaterialBufferBinding = 1;
 constexpr GLuint SphereBufferBinding = 2;
-    constexpr GLuint BvhBufferBinding = 3;
+constexpr GLuint BvhBufferBinding = 3;
+constexpr GLuint QuadBufferBinding = 4;
+constexpr GLuint TriangleBufferBinding = 5;
+constexpr GLuint PrimitiveRefBufferBinding = 6;
 constexpr unsigned int ComputeLocalSizeX = 16;
 constexpr unsigned int ComputeLocalSizeY = 16;
 const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
@@ -32,7 +35,7 @@ EditorCamera camera(
     -167.0f,
     -5.0f,
     10.0,
-    4.0
+    0.8
 );
 
 // timing
@@ -254,6 +257,13 @@ EditorCamera viewport(const Scene& scene) {
                 * sizeof(GpuBvhNode)
             )
         );
+    const GLuint quadBuffer =CreateStorageBuffer(QuadBufferBinding,gpuBvh.Quads.data(),
+        static_cast<GLsizeiptr>(gpuBvh.Quads.size()* sizeof(GpuQuad)));
+
+    const GLuint triangleBuffer = CreateStorageBuffer(TriangleBufferBinding,
+        gpuBvh.Tris.data(),static_cast<GLsizeiptr>(gpuBvh.Tris.size()* sizeof(GpuTri)));
+    const GLuint primitiveRefBuffer = CreateStorageBuffer(PrimitiveRefBufferBinding,
+        gpuBvh.PrimitiveRefs.data(),static_cast<GLsizeiptr>(gpuBvh.PrimitiveRefs.size()* sizeof(GpuPrimitiveRef)));
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -361,7 +371,7 @@ EditorCamera viewport(const Scene& scene) {
         TRACE;
 
     constexpr std::uint32_t MaxAccumulationFrames =
-        4096 * 4;
+        4096 * 32;
 
     while (!window.ShouldClose())
     {
@@ -397,23 +407,12 @@ EditorCamera viewport(const Scene& scene) {
             glDisable(GL_DEPTH_TEST);
             if (accumulationFrame< MaxAccumulationFrames) {
                 computeShader.use();
-                glBindBufferBase(
-                GL_SHADER_STORAGE_BUFFER,
-                MaterialBufferBinding,
-                materialBuffer
-            );
-
-                glBindBufferBase(
-                    GL_SHADER_STORAGE_BUFFER,
-                    SphereBufferBinding,
-                    sphereBuffer
-                );
-
-                glBindBufferBase(
-                    GL_SHADER_STORAGE_BUFFER,
-                    BvhBufferBinding,
-                    bvhBuffer
-                );
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,MaterialBufferBinding,materialBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,SphereBufferBinding,sphereBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,BvhBufferBinding,bvhBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,QuadBufferBinding,quadBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,TriangleBufferBinding,triangleBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,PrimitiveRefBufferBinding,primitiveRefBuffer);
 
                 glBindImageTexture(
                     0,
