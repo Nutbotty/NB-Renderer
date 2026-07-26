@@ -68,8 +68,8 @@ namespace {
     Bounds GetTriBounds(const SceneTri &tri) {
         Bounds bounds;
         bounds.Expand(tri.Q);
-        bounds.Expand(tri.U);
-        bounds.Expand(tri.V);
+        bounds.Expand(tri.Q + tri.U);
+        bounds.Expand(tri.Q + tri.V);
 
         bounds.Min -= glm::vec3(PADDING);
         bounds.Max += glm::vec3(PADDING);
@@ -181,8 +181,8 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
         const SceneTri& tri = sceneTris[triIndex];
         GpuTri gpuTri;
         gpuTri.Q = glm::vec4(tri.Q, 0);
-        gpuTri.U = glm::vec4(tri.U, 0);
-        gpuTri.V = glm::vec4(tri.V, 0);
+        gpuTri.U = glm::vec4(tri.Q + tri.U, 0);
+        gpuTri.V = glm::vec4(tri.Q + tri.V, 0);
         gpuTri.Metadata = glm::vec4(tri.material, 0, 0, 0);
         result.Tris.push_back(gpuTri);
 

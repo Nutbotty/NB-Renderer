@@ -388,7 +388,7 @@ bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
     vec3 edge1 = U - Q;
     vec3 edge2 = V - Q;
 
-    vec3 normal = cross(edge1, edge2);
+    vec3 normal = normalize(cross(edge1, edge2));
     vec3 h = cross(r.direction, edge2);
     float det = dot(edge1, h);
     if (abs(det) < 1e-8) {
@@ -406,6 +406,9 @@ bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
         return false;
     }
     float t = inv_det * dot(edge2, q);
+    if (!intervalSurrounds(rT, t)) {
+        return false;
+    }
     record.t = t;
     record.p = rayAt(r, t);
     record.material = tri.metadata.x;
