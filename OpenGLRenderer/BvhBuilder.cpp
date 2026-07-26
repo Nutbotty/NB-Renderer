@@ -157,7 +157,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
     }
 
     const auto &sceneQuads = scene.GetQuads();
-    for (std::uint32_t quadIndex = 0; quadIndex < sceneSpheres.size(); ++quadIndex) {
+    for (std::uint32_t quadIndex = 0; quadIndex < sceneQuads.size(); ++quadIndex) {
         const SceneQuad& quad = sceneQuads[quadIndex];
         GpuQuad gpuQuad;
         gpuQuad.Q = glm::vec4(quad.Q, 0);
