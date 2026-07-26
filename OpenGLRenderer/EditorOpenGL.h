@@ -10,6 +10,6 @@
 #include "../Scene/scene.h"
 #include "editorcamera.h"
 
-EditorCamera viewport(const Scene& scene);
+void viewport(const Scene& scene);
 
 #endif //NB_RENDERER_OPENGLVIEWPORT_H

@@ -30,7 +30,7 @@ const GLuint groupCountY = (SCR_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSiz
 
 // camera
 EditorCamera camera(
-    glm::vec3(13.0f, 2.0f, 3.0f),
+    glm::vec3(278.0f, 278.0f, -800.0f),
     glm::vec3(0,1,0),
     -167.0f,
     -5.0f,
@@ -73,7 +73,7 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     glm::vec3 Front{0.0f};
     glm::vec3 Up{0.0f};
 
-    float Zoom = 0.0f;
+    float Zoom = 20.0f;
     float FocusDistance = 0.0f;
     float DefocusAngle = 0.0f;
 };
@@ -110,7 +110,7 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
 
 }
 
-EditorCamera viewport(const Scene& scene) {
+void viewport(const Scene& scene) {
     const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
     const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
     const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
@@ -119,7 +119,7 @@ EditorCamera viewport(const Scene& scene) {
     Window window(SCR_WIDTH, SCR_HEIGHT, "Viewport");
 
     if (window.Initialize() != 0)
-        return camera;
+        return;
 
     Input input(camera);
     input.Initialize(window.GetNativeWindow());
@@ -410,5 +410,5 @@ EditorCamera viewport(const Scene& scene) {
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
-    return camera;
+    return;
 }
