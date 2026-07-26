@@ -23,7 +23,10 @@ struct alignas(16) GpuBvhNode {
 
 struct alignas(16) GpuMaterial {
     glm::vec4 AlbedoFuzz{0.0f};
+    // x = ior
     glm::vec4 Optical{0.0f};
+    // xyz =color, w = strength
+    glm::vec4 Emission{0.0f};
     glm::ivec4 Metadata{0};
 };
 
