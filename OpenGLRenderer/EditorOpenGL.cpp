@@ -35,105 +35,40 @@ EditorCamera camera(
     -167.0f,
     -5.0f,
     10.0,
-    0.8
+    0.0
 );
 
 // timing
-float deltaTime = 0.0f;	// time between current frame and last frame
+float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-struct IcoSphereMesh
-{
-    std::vector<float> vertices;
-    std::vector<uint32_t> indices;
-};
-IcoSphereMesh GenerateIcoSphere(int subdivisions);
-
 std::vector<GpuMaterial>
-BuildGpuMaterials(const Scene& scene)
-{
+BuildGpuMaterials(const Scene& scene) {
     std::vector<GpuMaterial> result;
+    result.reserve(scene.GetMaterials().size());
 
-    result.reserve(
-        scene.GetMaterials().size()
-    );
-
-    for (
-        const SceneMaterial& material :
-        scene.GetMaterials()
-    )
-    {
+    for (const SceneMaterial& material :scene.GetMaterials()) {
         GpuMaterial gpuMaterial;
-
-        gpuMaterial.AlbedoFuzz =
-            glm::vec4(
-                material.albedo,
-                material.fuzz
-            );
-
-        gpuMaterial.Optical =
-            glm::vec4(
-                material.indexOfRefraction,
-                0.0f,
-                0.0f,
-                0.0f
-            );
-
-        gpuMaterial.Metadata =
-            glm::ivec4(
-                static_cast<int>(material.type),
-                0,
-                0,
-                0
-            );
-
+        gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
+        gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
+        gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
+        gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
         result.push_back(gpuMaterial);
     }
-
     return result;
 }
 
-GLuint CreateStorageBuffer(
-    GLuint binding,
-    const void* data,
-    GLsizeiptr size
-)
-{
+GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     GLuint buffer = 0;
-
-    glGenBuffers(
-        1,
-        &buffer
-    );
-
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        buffer
-    );
-
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        size,
-        data,
-        GL_STATIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER,
-        binding,
-        buffer
-    );
-
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        0
-    );
-
+    glGenBuffers(1,&buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER,buffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER,size,data,GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER,binding,buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER,0);
     return buffer;
 }
 
-    struct CameraState
-{
+    struct CameraState {
     glm::vec3 Position{0.0f};
     glm::vec3 Front{0.0f};
     glm::vec3 Up{0.0f};
@@ -143,77 +78,34 @@ GLuint CreateStorageBuffer(
     float DefocusAngle = 0.0f;
 };
 
-    CameraState CaptureCameraState(
-        const EditorCamera& editorCamera
-    )
-    {
+    CameraState CaptureCameraState(const EditorCamera& editorCamera) {
         CameraState state;
-
-        state.Position =
-            editorCamera.Position;
-
-        state.Front =
-            editorCamera.Front;
-
-        state.Up =
-            editorCamera.Up;
-
-        state.Zoom =
-            editorCamera.Zoom;
-
-        state.FocusDistance =
-            editorCamera.FocusDistance;
-
-        state.DefocusAngle =
-            editorCamera.DefocusAngle;
-
+        state.Position = editorCamera.Position;
+        state.Front = editorCamera.Front;
+        state.Up = editorCamera.Up;
+        state.Zoom = editorCamera.Zoom;
+        state.FocusDistance = editorCamera.FocusDistance;
+        state.DefocusAngle = editorCamera.DefocusAngle;
         return state;
     }
 
-    bool NearlyEqual(
-        const glm::vec3& left,
-        const glm::vec3& right,
-        float epsilon = 1e-5f
-    )
-    {
-        const glm::vec3 difference =
-            left - right;
-
-        return glm::dot(
-            difference,
-            difference
-        ) <= epsilon * epsilon;
+    bool NearlyEqual(const glm::vec3& left, const glm::vec3& right, float epsilon = 1e-8f) {
+        const glm::vec3 difference = left - right;
+        return glm::dot(difference,difference) <= epsilon * epsilon;
     }
 
-    bool NearlyEqual(
-        float left,
-        float right,
-        float epsilon = 1e-5f
-    )
-    {
-        return std::abs(
-            left - right
-        ) <= epsilon;
+    bool NearlyEqual(float left, float right, float epsilon = 1e-8f) {
+        return std::abs(left - right) <= epsilon;
     }
 
-    bool CameraStateChanged(
-        const CameraState& previous,
-        const CameraState& current
-    )
-    {
+    bool CameraStateChanged(const CameraState& previous, const CameraState& current) {
         return
             !NearlyEqual(previous.Position, current.Position) ||
             !NearlyEqual(previous.Front, current.Front) ||
             !NearlyEqual(previous.Up, current.Up) ||
             !NearlyEqual(previous.Zoom, current.Zoom) ||
-            !NearlyEqual(
-                previous.FocusDistance,
-                current.FocusDistance
-            ) ||
-            !NearlyEqual(
-                previous.DefocusAngle,
-                current.DefocusAngle
-            );
+            !NearlyEqual(previous.FocusDistance, current.FocusDistance) ||
+            !NearlyEqual(previous.DefocusAngle,current.DefocusAngle);
     }
 
 }
