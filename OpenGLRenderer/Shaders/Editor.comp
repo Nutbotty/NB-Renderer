@@ -18,6 +18,7 @@ layout(rgba32f, binding = 0 ) uniform image2D outputImage;
 struct PackedMaterial {
     vec4 albedoFuzz;
     vec4 optical;
+    vec4 emission;
     ivec4 metadata;
 };
 struct PackedSphere {
@@ -90,6 +91,8 @@ struct Material {
     int type;
     vec3 albedo;
     float fuzz;
+    vec3 emission;
+    float emissionStrength;
     float refractionIndex;
 };
 
@@ -103,28 +106,17 @@ struct Sphere {
     float radius;
     int material;
 };
-Material loadMaterial(int index)
-{
-    PackedMaterial packed =
-    materialBuffer[index];
-
+Material loadMaterial(int index) {
+    PackedMaterial packed = materialBuffer[index];
     Material material;
-
-    material.type =
-    packed.metadata.x;
-
-    material.albedo =
-    packed.albedoFuzz.xyz;
-
-    material.fuzz =
-    packed.albedoFuzz.w;
-
-    material.refractionIndex =
-    packed.optical.x;
-
+    material.type = packed.metadata.x;
+    material.albedo = packed.albedoFuzz.xyz;
+    material.fuzz = packed.albedoFuzz.w;
+    material.emission = packed.emission.xyz;
+    material.emissionStrength = packed.emission.w;
+    material.refractionIndex = packed.optical.x;
     return material;
 }
-
 
 struct Camera {
     float aspectRatio;
@@ -247,6 +239,9 @@ vec2 sampleSquare() {
  * Hit detection and color
  */
 
+vec3 emitted(Material material){
+    return material.emission * material.emissionStrength;
+}
 bool scatterLambertian(Ray r_in, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
     vec3 scatter_direction = rec.normal + randomUnitVector();
     if (nearZero(scatter_direction)) {
@@ -287,8 +282,7 @@ bool scatterDielectric(Ray r_in, HitRecord rec, Material material, out vec3 atte
     scattered = Ray(rec.p, direction);
     return true;
 }
-bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered) {
-    Material material = loadMaterial(rec.material);
+bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered, Material material) {
     if (material.type == MATERIAL_LAMBERTIAN){
         return scatterLambertian(rayIn, rec, material, attenuation, scattered); }
     else if (material.type == MATERIAL_METAL) {
@@ -304,20 +298,11 @@ vec3 rayAt(Ray r, float t) {
 
 Sphere loadSphere(int index)
 {
-    PackedSphere packed =
-    sphereBuffer[index];
-
+    PackedSphere packed = sphereBuffer[index];
     Sphere sphere;
-
-    sphere.center =
-    packed.centerRadius.xyz;
-
-    sphere.radius =
-    packed.centerRadius.w;
-
-    sphere.material =
-    packed.metadata.x;
-
+    sphere.center = packed.centerRadius.xyz;
+    sphere.radius = packed.centerRadius.w;
+    sphere.material = packed.metadata.x;
     return sphere;
 }
 bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
@@ -427,10 +412,6 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     }
     return false;
 }
-
-
-
-
 bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, float rayTMax, out float entryT) {
     vec3 t0 = (node.boundsMin.xyz - ray.origin) * inverseDirection;
     vec3 t1 = (node.boundsMax.xyz - ray.origin) * inverseDirection;
@@ -441,7 +422,6 @@ bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, 
     entryT = currentMin;
     return currentMax >= currentMin;
 }
-
 bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
     if (uBvhNodeCount <= 0) {
         return false;
@@ -516,27 +496,32 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
     }
     return hitAnything;
 }
+
 vec3 skyBoxColor(Ray r) {
     vec3 unitDirection = normalize(r.direction);
     float blend = 0.5 * (unitDirection.y + 1.0);
-    return mix(vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), blend);
+    return mix(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 0.0), blend);
 }
 vec3 rayColor(Ray r) {
     Ray currentRay = r;
     vec3 throughput = vec3(1.0, 1.0, 1.0);
+    vec3 radiance = vec3(0.0);
     for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
         HitRecord rec;
         if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), rec)) {
+            Material material = loadMaterial(rec.material);
+            radiance += throughput * emitted(material);
             Ray scattered;
             vec3 attenuation;
-            if (!scatterMaterial(currentRay, rec, attenuation, scattered)){
-                return vec3(0.0);
+            if (!scatterMaterial(currentRay, rec, attenuation, scattered, material)){
+                break;
             }
             throughput *= attenuation;
             currentRay = scattered;
         }
         else {
-            return throughput * skyBoxColor(currentRay);
+            radiance += throughput * skyBoxColor(currentRay);
+            return radiance;
         }
     }
     return vec3(0.0);
