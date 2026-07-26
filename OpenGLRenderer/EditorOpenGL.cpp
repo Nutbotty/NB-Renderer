@@ -28,15 +28,7 @@ constexpr unsigned int ComputeLocalSizeY = 16;
 const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
 const GLuint groupCountY = (SCR_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
 
-// camera
-EditorCamera camera(
-    glm::vec3(278.0f, 278.0f, -800.0f),
-    glm::vec3(0,1,0),
-    -167.0f,
-    -5.0f,
-    10.0,
-    0.0
-);
+
 
 // timing
 float deltaTime = 0.0f;
@@ -80,10 +72,10 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
 
     CameraState CaptureCameraState(const EditorCamera& editorCamera) {
         CameraState state;
-        state.Position = editorCamera.Position;
-        state.Front = editorCamera.Front;
-        state.Up = editorCamera.Up;
-        state.Zoom = editorCamera.Zoom;
+        state.Position = editorCamera.LookFrom;
+        state.Front = editorCamera.LookAt;
+        state.Up = editorCamera.VUp;
+        state.Zoom = editorCamera.VerticalFov;
         state.FocusDistance = editorCamera.FocusDistance;
         state.DefocusAngle = editorCamera.DefocusAngle;
         return state;
@@ -115,6 +107,8 @@ void viewport(const Scene& scene) {
     const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
     const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
     const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.Nodes;
+
+    EditorCamera camera(scene.GetCamera());
 
     Window window(SCR_WIDTH, SCR_HEIGHT, "Viewport");
 
@@ -263,7 +257,7 @@ void viewport(const Scene& scene) {
         TRACE;
 
     constexpr std::uint32_t MaxAccumulationFrames =
-        4096 * 32;
+        4096;
 
     while (!window.ShouldClose())
     {
@@ -317,10 +311,10 @@ void viewport(const Scene& scene) {
                 );
                 computeShader.setUInt("uFrameIndex", accumulationFrame);
                 computeShader.setInt("uBvhNodeCount", static_cast<int>(gpuBvhNodes.size()));
-                computeShader.setVec3("uCameraLookFrom",camera.Position);
-                computeShader.setVec3("uCameraLookAt",camera.Position + camera.Front);
-                computeShader.setVec3("uCameraVUp",camera.Up);
-                computeShader.setFloat("uCameraVerticalFov",camera.Zoom);
+                computeShader.setVec3("uCameraLookFrom",camera.LookFrom);
+                computeShader.setVec3("uCameraLookAt",camera.LookAt);
+                computeShader.setVec3("uCameraVUp",camera.VUp);
+                computeShader.setFloat("uCameraVerticalFov",camera.VerticalFov);
                 computeShader.setFloat("uCameraFocusDistance", camera.FocusDistance);
                 computeShader.setFloat("uCameraDefocusAngle", camera.DefocusAngle);
 
@@ -363,16 +357,16 @@ void viewport(const Scene& scene) {
             ourShader.use();
 
             // pass projection matrix to shader (note that in this case it could change every frame)
-            glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+            glm::mat4 projection = glm::perspective(glm::radians(camera.VerticalFov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
             ourShader.setMat4("projection", projection);
 
             // camera/view transformation
             glm::mat4 view = camera.GetViewMatrix();
             ourShader.setMat4("view", view);
-            ourShader.setVec3("cameraPosition",camera.Position);
+            ourShader.setVec3("cameraPosition",camera.LookFrom);
             ourShader.setFloat("focusDistance",camera.FocusDistance);
             ourShader.setFloat("defocusAngle",camera.DefocusAngle);
-            ourShader.setVec3("cameraFront",camera.Front);
+            ourShader.setVec3("cameraFront",camera.LookAt);
             // render boxes
             glBindVertexArray(VAO);
 
