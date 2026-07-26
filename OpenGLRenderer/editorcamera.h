@@ -9,7 +9,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include "../Scene/Scene.h"
 
-enum Camera_Movement {
+enum CameraMovement {
     FORWARD,
     BACKWARD,
     LEFT,
@@ -40,7 +40,7 @@ public:
     [[nodiscard]] SceneCamera ToSceneCamera() const;
     [[nodiscard]] glm::mat4 GetViewMatrix() const;
 
-    void ProcessKeyboard(Camera_Movement direction,float deltaTime);
+    void ProcessKeyboard(CameraMovement direction,float deltaTime);
     void ProcessMouseMovement(float xOffset, float yOffset);
     void ProcessMouseScroll(float yOffset);
 
