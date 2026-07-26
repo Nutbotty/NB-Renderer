@@ -25,6 +25,8 @@ struct SceneMaterial {
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
     float fuzz = 0.0f;
     float indexOfRefraction = 1.0f;
+    glm::vec3 emission{0.0, 0.0, 0.0};
+    float emissionStrength = 0.0;
 };
 struct SceneSphere {
     glm::vec3 center{0.0f};
@@ -58,12 +60,15 @@ class Scene
 public:
     Scene() = default;
 
-    MaterialId addMaterial(MaterialType type, const glm::vec3& albedo = glm::vec3(1.0f), float fuzz = 0.0f,float indexOfRefraction = 1.0f){
+    MaterialId addMaterial(MaterialType type, const glm::vec3& albedo = glm::vec3(1.0f), float fuzz = 0.0f,float indexOfRefraction = 1.0f, const glm::vec3& emission = glm::vec3(0.0f),
+    float emissionStrength = 0.0f){
         SceneMaterial material;
         material.type = type;
         material.albedo = albedo;
         material.fuzz = fuzz;
-        material.indexOfRefraction =indexOfRefraction;
+        material.indexOfRefraction = indexOfRefraction;
+        material.emission = emission;
+        material.emissionStrength = emissionStrength;
         const auto id = static_cast<MaterialId>(m_Materials.size());
         m_Materials.push_back(material);
         MarkDirty();
