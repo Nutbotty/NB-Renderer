@@ -65,6 +65,9 @@ private:
 
      // lookFrom - lookAt
     float TargetDistance = 1.0f;
+
+    void UpdateAnglesFromTarget();
+    void UpdateVectorsFromAngles();
 };
 
 #endif //NB_RENDERER_CAMERA_H
