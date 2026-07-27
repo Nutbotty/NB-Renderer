@@ -7,6 +7,7 @@ const int PRIMITIVE_SPHERE   = 0;
 const int PRIMITIVE_QUAD     = 1;
 const int PRIMITIVE_TRI = 2;
 
+const float EPSILON = 1e-8;
 const float MAX_RAY_DISTANCE = 1e30;
 const int SAMPLES_PER_PIXEL = 5;
 const int SAMPLES_PER_DISPATCH = 1;
@@ -71,7 +72,6 @@ layout(std430, binding = 6) readonly buffer PrimitiveRefBuffer {
     PackedPrimitiveRef primitiveRefBuffer[];
 };
 
-
 uniform int uBvhNodeCount;
 uniform vec3 uCameraLookFrom;
 uniform vec3 uCameraLookAt;
@@ -82,10 +82,6 @@ uniform float uCameraFocusDistance;
 uniform float uCameraDefocusAngle;
 
 uniform uint uFrameIndex;
-
-/*
- * Structs
- */
 
 struct Material {
     int type;
@@ -128,9 +124,6 @@ struct Camera {
     vec3 defocus_disc_v;
 };
 
-/*
- * Hit record and utils
- */
 struct HitRecord {
     vec3 p;
     vec3 normal;
@@ -151,31 +144,22 @@ struct Interval {
     float min;
     float max;
 };
-
 float intervalSize(Interval interval) {
     return interval.max - interval.min;
 }
-
 bool intervalContains(Interval interval, float value){
     return interval.min <= value && value <= interval.max;
 }
-
 bool intervalSurrounds(Interval interval, float value){
     return interval.min < value && value < interval.max;
 }
-
 float intervalClamp(Interval interval, float value) {
     return clamp(value, interval.min, interval.max);
 }
 
-
 bool nearZero(vec3 value) {
-    const float epsilon = 1e-8;
-    return all(lessThan(abs(value), vec3(epsilon)));
+    return all(lessThan(abs(value), vec3(EPSILON)));
 }
-/*
- * RNG
- */
 uint rngState;
 uint pcgHash(uint inputValue) {
     uint state = inputValue * 747796405u + 2891336453u;
@@ -199,7 +183,7 @@ vec3 randomUnitVector() {
     for (int attempt = 0; attempt < 64; ++attempt) {
         vec3 p = randomVec3(-1.0, 1.0);
         float lengthSquared = dot(p, p);
-        if (lengthSquared > 1e-12 && lengthSquared <= 1.0) {
+        if (lengthSquared > EPSILON && lengthSquared <= 1.0) {
             return p / sqrt(lengthSquared);
         }
     }
@@ -235,9 +219,6 @@ vec2 sampleSquare() {
     );
 }
 
-/*
- * Hit detection and color
- */
 
 vec3 emitted(Material material){
     return material.emission * material.emissionStrength;
@@ -296,8 +277,7 @@ vec3 rayAt(Ray r, float t) {
     return r.origin + t * r.direction;
 }
 
-Sphere loadSphere(int index)
-{
+Sphere loadSphere(int index) {
     PackedSphere packed = sphereBuffer[index];
     Sphere sphere;
     sphere.center = packed.centerRadius.xyz;
@@ -337,13 +317,13 @@ bool hitQuad(int quadIndex, Ray r, Interval rT, out HitRecord record) {
     vec3 n =
     cross(u, v);
     float nLengthSquared = dot(n, n);
-    if (nLengthSquared < 1e-12) {
+    if (nLengthSquared < EPSILON) {
         return false;
     }
     vec3 normal = n / sqrt(nLengthSquared);
     float denom = dot(normal, r.direction);
 
-    if (abs(denom) < 1e-8) {
+    if (abs(denom) < EPSILON) {
         return false;
     }
     float D = dot(normal, Q);
@@ -376,18 +356,18 @@ bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
     vec3 normal = normalize(cross(edge1, edge2));
     vec3 h = cross(r.direction, edge2);
     float det = dot(edge1, h);
-    if (abs(det) < 1e-8) {
+    if (abs(det) < EPSILON) {
         return false;
     }
     float inv_det = 1.0 / det;
     vec3 s = r.origin - Q;
     float u = inv_det * dot(s, h);
-    if (u < 1e-8 || u - 1 > 1e-8) {
+    if (u < EPSILON || u - 1 > EPSILON) {
         return false;
     }
     vec3 q = cross(s, edge1);
     float v = inv_det * dot(r.direction, q);
-    if (v < -1e-8 || u + v - 1 > 1e-8) {
+    if (v < -EPSILON || u + v - 1 > EPSILON) {
         return false;
     }
     float t = inv_det * dot(edge2, q);
@@ -443,9 +423,7 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
         int nodeIndex =
         stack[--stackSize];
 
-        PackedBvhNode node =
-        bvhNodeBuffer[nodeIndex];
-
+        PackedBvhNode node = bvhNodeBuffer[nodeIndex];
         bool isLeaf = node.metadata.z != 0;
 
         if (isLeaf) {
@@ -472,11 +450,6 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
         bool hitLeft = hitAabb(leftNode, ray, inverseDirection, rayT.min, closestSoFar, leftEntryT);
         bool hitRight = hitAabb(rightNode, ray, inverseDirection, rayT.min, closestSoFar, rightEntryT);
 
-        /*
-         * Push the farther child first because the stack is LIFO.
-         * The nearer child is therefore processed first, which may
-         * reduce closestSoFar before the farther child is visited.
-         */
         if (hitLeft && hitRight) {
             if (leftEntryT < rightEntryT) {
                 stack[stackSize++] = rightChild;
