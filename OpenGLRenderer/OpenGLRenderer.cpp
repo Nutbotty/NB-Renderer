@@ -11,8 +11,8 @@
 #include "BvhBuilder.h"
 
 namespace {
-    constexpr int RenderWidth = 2560;
-    constexpr int RenderHeight = 1440;
+    constexpr int RenderWidth = 640;
+    constexpr int RenderHeight = 360;
 
     constexpr unsigned int ComputeLocalSizeX = 16;
     constexpr unsigned int ComputeLocalSizeY = 16;
@@ -20,6 +20,9 @@ namespace {
     constexpr GLuint MaterialBufferBinding = 1;
     constexpr GLuint SphereBufferBinding = 2;
     constexpr GLuint BvhBufferBinding = 3;
+    constexpr GLuint QuadBufferBinding = 4;
+    constexpr GLuint TriangleBufferBinding = 5;
+    constexpr GLuint PrimitiveRefBufferBinding = 6;
 
     /*
      * best results with size 4 so far, 8 good too
@@ -28,73 +31,28 @@ namespace {
 }
 
 std::vector<GpuMaterial>
-BuildGpuMaterials(const Scene &scene) {
+BuildGpuMaterials(const Scene& scene) {
     std::vector<GpuMaterial> result;
-
     result.reserve(scene.GetMaterials().size());
 
-    for (const SceneMaterial &material: scene.GetMaterials()) {
+    for (const SceneMaterial& material :scene.GetMaterials()) {
         GpuMaterial gpuMaterial;
-
-        gpuMaterial.AlbedoFuzz =
-                glm::vec4(
-                    material.albedo,
-                    material.fuzz
-                );
-
-        gpuMaterial.Optical =
-                glm::vec4(
-                    material.indexOfRefraction,
-                    0.0f,
-                    0.0f,
-                    0.0f
-                );
-
-        gpuMaterial.Metadata =
-                glm::ivec4(
-                    static_cast<int>(material.type),
-                    0,
-                    0,
-                    0
-                );
-
+        gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
+        gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
+        gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
+        gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
         result.push_back(gpuMaterial);
     }
-
     return result;
 }
 
-GLuint CreateStorageBuffer(GLuint binding, const void *data, GLsizeiptr size) {
+GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     GLuint buffer = 0;
-
-    glGenBuffers(
-        1,
-        &buffer
-    );
-
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        buffer
-    );
-
-    glBufferData(
-        GL_SHADER_STORAGE_BUFFER,
-        size,
-        data,
-        GL_STATIC_DRAW
-    );
-
-    glBindBufferBase(
-        GL_SHADER_STORAGE_BUFFER,
-        binding,
-        buffer
-    );
-
-    glBindBuffer(
-        GL_SHADER_STORAGE_BUFFER,
-        0
-    );
-
+    glGenBuffers(1,&buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER,buffer);
+    glBufferData(GL_SHADER_STORAGE_BUFFER,size,data,GL_STATIC_DRAW);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER,binding,buffer);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER,0);
     return buffer;
 }
 
@@ -111,31 +69,18 @@ int Renderer(const Scene &scene) {
 
     Shader computeShader("OpenGLRenderer/Shaders/render.comp");
     Shader fullscreenShader("OpenGLRenderer/Shaders/render.vs", "OpenGLRenderer/Shaders/render.fs");
-    const GLuint materialBuffer = CreateStorageBuffer(
-        MaterialBufferBinding,
-        gpuMaterials.data(),
-        static_cast<GLsizeiptr>(
-            gpuMaterials.size()
-            * sizeof(GpuMaterial)
-        )
-    );
-    const GLuint sphereBuffer = CreateStorageBuffer(
-        SphereBufferBinding,
-        gpuSpheres.data(),
-        static_cast<GLsizeiptr>(
-            gpuSpheres.size()
-            * sizeof(GpuSphere)
-        )
-    );
-    const GLuint bvhBuffer =
-            CreateStorageBuffer(
-                BvhBufferBinding,
-                gpuBvhNodes.data(),
-                static_cast<GLsizeiptr>(
-                    gpuBvhNodes.size()
-                    * sizeof(GpuBvhNode)
-                )
-            );
+    const GLuint materialBuffer = CreateStorageBuffer(MaterialBufferBinding, gpuMaterials.data(),
+    gpuMaterials.size() * sizeof(GpuMaterial));
+    const GLuint sphereBuffer = CreateStorageBuffer(SphereBufferBinding,gpuSpheres.data(),
+        gpuSpheres.size() * sizeof(GpuSphere));
+    const GLuint bvhBuffer =CreateStorageBuffer(BvhBufferBinding, gpuBvhNodes.data(),
+            static_cast<GLsizeiptr>(gpuBvhNodes.size() * sizeof(GpuBvhNode)));
+    const GLuint quadBuffer =CreateStorageBuffer(QuadBufferBinding,gpuBvh.Quads.data(),
+        static_cast<GLsizeiptr>(gpuBvh.Quads.size()* sizeof(GpuQuad)));
+    const GLuint triangleBuffer = CreateStorageBuffer(TriangleBufferBinding,
+        gpuBvh.Tris.data(),static_cast<GLsizeiptr>(gpuBvh.Tris.size()* sizeof(GpuTri)));
+    const GLuint primitiveRefBuffer = CreateStorageBuffer(PrimitiveRefBufferBinding,
+        gpuBvh.PrimitiveRefs.data(),static_cast<GLsizeiptr>(gpuBvh.PrimitiveRefs.size()* sizeof(GpuPrimitiveRef)));
     /*
      * Create the texture that the compute shader will write into.
      */
