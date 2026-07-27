@@ -1,14 +1,40 @@
 #version 430 core
 
+const int MATERIAL_LAMBERTIAN = 0;
+const int MATERIAL_METAL = 1;
+const int MATERIAL_DIELECTRIC = 2;
+const int PRIMITIVE_SPHERE   = 0;
+const int PRIMITIVE_QUAD     = 1;
+const int PRIMITIVE_TRI = 2;
+
+const float EPSILON = 1e-8;
+const float MAX_RAY_DISTANCE = 1e30;
+const int SAMPLES_PER_PIXEL = 2000;
+const int MAX_DEPTH = 16;
+const int BVH_STACK_SIZE = 32;
+
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform writeonly image2D outputImage;
 struct PackedMaterial {
     vec4 albedoFuzz;
     vec4 optical;
+    vec4 emission;
     ivec4 metadata;
 };
 struct PackedSphere {
     vec4 centerRadius;
+    ivec4 metadata;
+};
+struct PackedQuad {
+    vec4 Q;
+    vec4 u;
+    vec4 v;
+    ivec4 metadata;
+};
+struct PackedTriangle {
+    vec4 Q;
+    vec4 U;
+    vec4 V;
     ivec4 metadata;
 };
 struct PackedBvhNode {
@@ -16,22 +42,33 @@ struct PackedBvhNode {
     vec4 boundsMax;
     ivec4 metadata;
 };
+struct PackedPrimitiveRef {
+/*
+ * x = primitive type
+ * y = primitive index
+ */
+    ivec4 metadata;
+};
 
 
 layout(std430, binding = 1) readonly buffer MaterialBuffer {
     PackedMaterial materialBuffer[];
 };
-
 layout(std430, binding = 2) readonly buffer SphereBuffer {
     PackedSphere sphereBuffer[];
 };
 layout(std430, binding = 3) readonly buffer BvhNodeBuffer {
     PackedBvhNode bvhNodeBuffer[];
 };
-uint sphereTestCount = 0u;
-uint aabbTestCount = 0u;
-
-
+layout(std430, binding = 4) readonly buffer QuadBuffer {
+    PackedQuad quadBuffer[];
+};
+layout(std430, binding = 5) readonly buffer TriangleBuffer {
+    PackedTriangle triangleBuffer[];
+};
+layout(std430, binding = 6) readonly buffer PrimitiveRefBuffer {
+    PackedPrimitiveRef primitiveRefBuffer[];
+};
 
 uniform int uBvhNodeCount;
 uniform vec3 uCameraLookFrom;
@@ -42,21 +79,12 @@ uniform float uCameraVerticalFov;
 uniform float uCameraFocusDistance;
 uniform float uCameraDefocusAngle;
 
-const float MAX_RAY_DISTANCE = 1e30;
-const int SAMPLES_PER_PIXEL = 200;
-const int MAX_DEPTH = 16;
-const int BVH_STACK_SIZE = 32;
-/*
- * Structs
- */
-const int MATERIAL_LAMBERTIAN = 0;
-const int MATERIAL_METAL = 1;
-const int MATERIAL_DIELECTRIC = 2;
-
 struct Material {
     int type;
     vec3 albedo;
     float fuzz;
+    vec3 emission;
+    float emissionStrength;
     float refractionIndex;
 };
 
@@ -70,46 +98,18 @@ struct Sphere {
     float radius;
     int material;
 };
-Material loadMaterial(int index)
-{
-    PackedMaterial packed =
-    materialBuffer[index];
-
+Material loadMaterial(int index) {
+    PackedMaterial packed = materialBuffer[index];
     Material material;
-
-    material.type =
-    packed.metadata.x;
-
-    material.albedo =
-    packed.albedoFuzz.xyz;
-
-    material.fuzz =
-    packed.albedoFuzz.w;
-
-    material.refractionIndex =
-    packed.optical.x;
-
+    material.type = packed.metadata.x;
+    material.albedo = packed.albedoFuzz.xyz;
+    material.fuzz = packed.albedoFuzz.w;
+    material.emission = packed.emission.xyz;
+    material.emissionStrength = packed.emission.w;
+    material.refractionIndex = packed.optical.x;
     return material;
 }
 
-Sphere loadSphere(int index)
-{
-    PackedSphere packed =
-    sphereBuffer[index];
-
-    Sphere sphere;
-
-    sphere.center =
-    packed.centerRadius.xyz;
-
-    sphere.radius =
-    packed.centerRadius.w;
-
-    sphere.material =
-    packed.metadata.x;
-
-    return sphere;
-}
 struct Camera {
     float aspectRatio;
     vec3 center;
@@ -120,9 +120,6 @@ struct Camera {
     vec3 defocus_disc_v;
 };
 
-/*
- * Hit record and utils
- */
 struct HitRecord {
     vec3 p;
     vec3 normal;
@@ -136,38 +133,26 @@ void setFaceNormal(Ray r, vec3 outwardNormal, inout HitRecord record) {
     record.normal = record.frontFace ? outwardNormal : -outwardNormal;
 }
 
-/*
- * Interval and utils
- */
 struct Interval {
     float min;
     float max;
 };
-
 float intervalSize(Interval interval) {
     return interval.max - interval.min;
 }
-
 bool intervalContains(Interval interval, float value){
     return interval.min <= value && value <= interval.max;
 }
-
 bool intervalSurrounds(Interval interval, float value){
     return interval.min < value && value < interval.max;
 }
-
 float intervalClamp(Interval interval, float value) {
     return clamp(value, interval.min, interval.max);
 }
 
-
 bool nearZero(vec3 value) {
-    const float epsilon = 1e-8;
-    return all(lessThan(abs(value), vec3(epsilon)));
+    return all(lessThan(abs(value), vec3(EPSILON)));
 }
-/*
- * RNG
- */
 uint rngState;
 uint pcgHash(uint inputValue) {
     uint state = inputValue * 747796405u + 2891336453u;
@@ -227,10 +212,10 @@ vec2 sampleSquare() {
     );
 }
 
-/*
- * Hit detection and color
- */
 
+vec3 emitted(Material material){
+    return material.emission * material.emissionStrength;
+}
 bool scatterLambertian(Ray r_in, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
     vec3 scatter_direction = rec.normal + randomUnitVector();
     if (nearZero(scatter_direction)) {
@@ -271,8 +256,7 @@ bool scatterDielectric(Ray r_in, HitRecord rec, Material material, out vec3 atte
     scattered = Ray(rec.p, direction);
     return true;
 }
-bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered) {
-    Material material = loadMaterial(rec.material);
+bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered, Material material) {
     if (material.type == MATERIAL_LAMBERTIAN){
         return scatterLambertian(rayIn, rec, material, attenuation, scattered); }
     else if (material.type == MATERIAL_METAL) {
@@ -286,6 +270,14 @@ vec3 rayAt(Ray r, float t) {
     return r.origin + t * r.direction;
 }
 
+Sphere loadSphere(int index) {
+    PackedSphere packed = sphereBuffer[index];
+    Sphere sphere;
+    sphere.center = packed.centerRadius.xyz;
+    sphere.radius = packed.centerRadius.w;
+    sphere.material = packed.metadata.x;
+    return sphere;
+}
 bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     vec3 oc = r.origin - sphere.center;
     float a = dot(r.direction, r.direction);
@@ -310,6 +302,89 @@ bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     record.material = sphere.material;
     return true;
 }
+bool hitQuad(int quadIndex, Ray r, Interval rT, out HitRecord record) {
+    PackedQuad quad = quadBuffer[quadIndex];
+    vec3 Q = quad.Q.xyz;
+    vec3 u = quad.u.xyz;
+    vec3 v = quad.v.xyz;
+    vec3 n =
+    cross(u, v);
+    float nLengthSquared = dot(n, n);
+    if (nLengthSquared < 1e-12) {
+        return false;
+    }
+    vec3 normal = n / sqrt(nLengthSquared);
+    float denom = dot(normal, r.direction);
+
+    if (abs(denom) < 1e-8) {
+        return false;
+    }
+    float D = dot(normal, Q);
+    float t = (D - dot(normal, r.origin)) / denom;
+    if (!intervalSurrounds(rT, t)){
+        return false;
+    }
+    vec3 intersection = rayAt(r, t);
+    vec3 planarHit = intersection - Q;
+    vec3 w = n / nLengthSquared;
+    float alpha = dot(w, cross(planarHit, v));
+    float beta = dot(w, cross(u, planarHit));
+    if (alpha < 0.0 || alpha > 1.0 || beta < 0.0 || beta > 1.0){
+        return false;
+    }
+    record.t = t;
+    record.p = intersection;
+    record.material = quad.metadata.x;
+    setFaceNormal(r, normal, record);
+    return true;
+}
+bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
+    PackedTriangle tri = triangleBuffer[triIndex];
+    vec3 Q = tri.Q.xyz;
+    vec3 U = tri.U.xyz;
+    vec3 V = tri.V.xyz;
+    vec3 edge1 = U - Q;
+    vec3 edge2 = V - Q;
+
+    vec3 normal = normalize(cross(edge1, edge2));
+    vec3 h = cross(r.direction, edge2);
+    float det = dot(edge1, h);
+    if (abs(det) < 1e-8) {
+        return false;
+    }
+    float inv_det = 1.0 / det;
+    vec3 s = r.origin - Q;
+    float u = inv_det * dot(s, h);
+    if (u < 1e-8 || u - 1 > 1e-8) {
+        return false;
+    }
+    vec3 q = cross(s, edge1);
+    float v = inv_det * dot(r.direction, q);
+    if (v < -1e-8 || u + v - 1 > 1e-8) {
+        return false;
+    }
+    float t = inv_det * dot(edge2, q);
+    if (!intervalSurrounds(rT, t)) {
+        return false;
+    }
+    record.t = t;
+    record.p = rayAt(r, t);
+    record.material = tri.metadata.x;
+    setFaceNormal(r, normal, record);
+    return true;
+}
+bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRecord record) {
+    int primitiveType = primitiveRef.metadata.x;
+    int primitiveIndex = primitiveRef.metadata.y;
+    if (primitiveType == PRIMITIVE_SPHERE) {
+        return false;
+    } else if (primitiveType == PRIMITIVE_QUAD) {
+        return hitQuad(primitiveIndex, r, rT, record);
+    } else if (primitiveType == PRIMITIVE_TRI) {
+        return hitTri(primitiveIndex, r, rT, record);
+    }
+    return false;
+}
 bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, float rayTMax, out float entryT) {
     vec3 t0 = (node.boundsMin.xyz - ray.origin) * inverseDirection;
     vec3 t1 = (node.boundsMax.xyz - ray.origin) * inverseDirection;
@@ -320,7 +395,6 @@ bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, 
     entryT = currentMin;
     return currentMax >= currentMin;
 }
-
 bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
     if (uBvhNodeCount <= 0) {
         return false;
@@ -342,103 +416,52 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
         int nodeIndex =
         stack[--stackSize];
 
-        PackedBvhNode node =
-        bvhNodeBuffer[nodeIndex];
-
+        PackedBvhNode node = bvhNodeBuffer[nodeIndex];
         bool isLeaf = node.metadata.z != 0;
+        if (isLeaf) {
+            int firstPrimitive = node.metadata.x;
+            int primitiveCount = node.metadata.y;
 
-        if (isLeaf)
-        {
-            int firstSphere = node.metadata.x;
-            int sphereCount = node.metadata.y;
-
-            for (int sphereOffset = 0; sphereOffset < sphereCount; ++sphereOffset) {
-                int sphereIndex = firstSphere + sphereOffset;
-
-                Sphere sphere = loadSphere(sphereIndex);
-                ++sphereTestCount;
-                if (hitSphere(sphere, ray, Interval(rayT.min, closestSoFar), temporaryRecord)) {
+            for (int primitiveOffset = 0; primitiveOffset < primitiveCount; ++primitiveOffset) {
+                int primitiveRefIndex = firstPrimitive + primitiveOffset;
+                PackedPrimitiveRef primitiveRef = primitiveRefBuffer[primitiveRefIndex];
+                if (hitPrimitive(primitiveRef, ray, Interval(rayT.min, closestSoFar), temporaryRecord)) {
                     hitAnything = true;
                     closestSoFar = temporaryRecord.t;
                     record = temporaryRecord;
                 }
             }
-
             continue;
         }
-
-        int leftChild =
-        node.metadata.x;
-
-        int rightChild =
-        node.metadata.y;
-
-        PackedBvhNode leftNode =
-        bvhNodeBuffer[leftChild];
-
-        PackedBvhNode rightNode =
-        bvhNodeBuffer[rightChild];
-
+        int leftChild = node.metadata.x;
+        int rightChild = node.metadata.y;
+        PackedBvhNode leftNode = bvhNodeBuffer[leftChild];
+        PackedBvhNode rightNode = bvhNodeBuffer[rightChild];
         float leftEntryT;
         float rightEntryT;
-        ++aabbTestCount;
-        bool hitLeft =
-        hitAabb(
-                leftNode,
-                ray,
-                inverseDirection,
-                rayT.min,
-                closestSoFar,
-                leftEntryT
-        );
-        +aabbTestCount;
-        bool hitRight =
-        hitAabb(
-                rightNode,
-                ray,
-                inverseDirection,
-                rayT.min,
-                closestSoFar,
-                rightEntryT
-        );
+        bool hitLeft = hitAabb(leftNode, ray, inverseDirection, rayT.min, closestSoFar, leftEntryT);
+        bool hitRight = hitAabb(rightNode, ray, inverseDirection, rayT.min, closestSoFar, rightEntryT);
 
-        /*
-         * Push the farther child first because the stack is LIFO.
-         * The nearer child is therefore processed first, which may
-         * reduce closestSoFar before the farther child is visited.
-         */
-        if (hitLeft && hitRight)
-        {
-            if (leftEntryT < rightEntryT)
-            {
-                stack[stackSize++] =
-                rightChild;
-
-                stack[stackSize++] =
-                leftChild;
+        if (hitLeft && hitRight) {
+            if (leftEntryT < rightEntryT) {
+                stack[stackSize++] = rightChild;
+                stack[stackSize++] = leftChild;
             }
-            else
-            {
-                stack[stackSize++] =
-                leftChild;
-
-                stack[stackSize++] =
-                rightChild;
+            else {
+                stack[stackSize++] = leftChild;
+                stack[stackSize++] = rightChild;
             }
         }
-        else if (hitLeft)
-        {
-            stack[stackSize++] =
-            leftChild;
+        else if (hitLeft) {
+            stack[stackSize++] = leftChild;
         }
-        else if (hitRight)
-        {
-            stack[stackSize++] =
-            rightChild;
+        else if (hitRight) {
+            stack[stackSize++] = rightChild;
         }
     }
     return hitAnything;
 }
+
 vec3 skyBoxColor(Ray r) {
     vec3 unitDirection = normalize(r.direction);
     float blend = 0.5 * (unitDirection.y + 1.0);
@@ -447,19 +470,23 @@ vec3 skyBoxColor(Ray r) {
 vec3 rayColor(Ray r) {
     Ray currentRay = r;
     vec3 throughput = vec3(1.0, 1.0, 1.0);
+    vec3 radiance = vec3(0.0);
     for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
         HitRecord rec;
         if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), rec)) {
+            Material material = loadMaterial(rec.material);
+            radiance += throughput * emitted(material);
             Ray scattered;
             vec3 attenuation;
-            if (!scatterMaterial(currentRay, rec, attenuation, scattered)){
-                return vec3(0.0);
+            if (!scatterMaterial(currentRay, rec, attenuation, scattered, material)){
+                break;
             }
             throughput *= attenuation;
             currentRay = scattered;
         }
         else {
-            return throughput * skyBoxColor(currentRay);
+            radiance += throughput * skyBoxColor(currentRay);
+            return radiance;
         }
     }
     return vec3(0.0);
