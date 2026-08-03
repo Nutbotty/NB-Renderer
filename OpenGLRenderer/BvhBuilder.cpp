@@ -276,26 +276,21 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
         addReference(instance.primitive, transformIndex, instance.objectToWorld);
     }
 
-
-
-
-
-
-
-
     if (references.empty()) {
         return result;
     }
     leafSize = std::max(leafSize,std::uint32_t{1});
     result.Nodes.reserve(references.size() * 2);
-
     BuildBvhNode(references, result.Nodes, 0, static_cast<std::uint32_t>(references.size()), leafSize);
-
     result.PrimitiveRefs.reserve(references.size());
+    
     for (const PrimitiveReference& reference :references) {
         GpuPrimitiveRef gpuReference;
-        gpuReference.Metadata = glm::ivec4(static_cast<int>(reference.Type),
-            static_cast<int>(reference.PrimitiveIndex),0,0);
+        gpuReference.Metadata = glm::ivec4(
+            static_cast<int>(reference.Type),
+            static_cast<int>(reference.PrimitiveIndex),
+            static_cast<int>(reference.TransformIndex),
+            0);
         result.PrimitiveRefs.push_back(gpuReference);
     }
     return result;
