@@ -47,6 +47,8 @@ struct PackedPrimitiveRef {
 /*
  * x = primitive type
  * y = primitive index
+ * z = transform-buffer index
+ * w = unused
  */
     ivec4 metadata;
 };
@@ -75,6 +77,9 @@ layout(std430, binding = 5) readonly buffer TriangleBuffer {
 layout(std430, binding = 6) readonly buffer PrimitiveRefBuffer {
     PackedPrimitiveRef primitiveRefBuffer[];
 };
+layout(std430, binding = 7) readonly buffer TransformBuffer {
+    PackedTransform transformBuffer[];
+};
 
 uniform int uBvhNodeCount;
 uniform vec3 uCameraLookFrom;
@@ -100,6 +105,21 @@ struct Ray {
     vec3 origin;
     vec3 direction;
 };
+
+vec3 transformPoint(mat4 transform, vec3 point) {
+    return (transform * vec4(point, 1.0)).xyz;
+}
+
+vec3 transformVector(mat4 transform, vec3 vector) {
+    return (transform * vec4(vector, 0.0)).xyz;
+}
+
+Ray transformRay(mat4 transform, Ray ray) {
+    Ray transformed;
+    transformed.origin = transformPoint(transform, ray.origin);
+    transformed.direction = transformVector(transform, ray.direction);
+    return transformed;
+}
 
 struct Sphere {
     vec3 center;
@@ -289,6 +309,7 @@ Sphere loadSphere(int index) {
     sphere.material = packed.metadata.x;
     return sphere;
 }
+//todo fix hitsphere to use buffer
 bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     vec3 oc = r.origin - sphere.center;
     float a = dot(r.direction, r.direction);
@@ -387,14 +408,30 @@ bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
 bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRecord record) {
     int primitiveType = primitiveRef.metadata.x;
     int primitiveIndex = primitiveRef.metadata.y;
+    int transformIndex = primitiveRef.metadata.z;
+    PackedTransform instanceTransform = transformBuffer[transformIndex];
+    Ray localRay = transformRay(instanceTransform.worldToObject, r);
+
+    HitRecord localRecord;
+    bool hit = false;
+
     if (primitiveType == PRIMITIVE_SPHERE) {
         return false;
     } else if (primitiveType == PRIMITIVE_QUAD) {
-        return hitQuad(primitiveIndex, r, rT, record);
+        hit = hitQuad(primitiveIndex, localRay, rT, localRecord);
     } else if (primitiveType == PRIMITIVE_TRI) {
-        return hitTri(primitiveIndex, r, rT, record);
+        hit = hitTri(primitiveIndex, localRay, rT, localRecord);
     }
-    return false;
+    if (!hit) {
+        return false;
+    }
+    record = localRecord;
+    record.p = transformPoint(instanceTransform.objectToWorld, localRecord.p);
+    vec3 localOutwardNormal = localRecord.frontFace? localRecord.normal: -localRecord.normal;
+    mat3 normalMatrix = transpose(mat3(instanceTransform.worldToObject));
+    vec3 worldOutwardNormal = normalize(normalMatrix * localOutwardNormal);
+    setFaceNormal(r, worldOutwardNormal, record);
+    return true;
 }
 bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, float rayTMax, out float entryT) {
     vec3 t0 = (node.boundsMin.xyz - ray.origin) * inverseDirection;
@@ -501,7 +538,7 @@ vec3 rayColor(Ray r) {
             return radiance;
         }
     }
-    return vec3(0.0);
+    return radiance;
 }
 
 Camera makeCamera(ivec2 imageDimensions) {
