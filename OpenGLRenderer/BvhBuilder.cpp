@@ -15,6 +15,7 @@
 
 namespace {
     constexpr float PADDING = 0.0001f;
+    constexpr float EPSILON = 1e-8f;
     struct Bounds {
         glm::vec3 Min{std::numeric_limits<float>::max()};
         glm::vec3 Max{std::numeric_limits<float>::lowest()};
@@ -36,6 +37,7 @@ namespace {
         Bounds BoundingBox;
         glm::vec3 Centroid{0.0, 0.0, 0.0};
     };
+
 
     void PadDegenerateAxes(Bounds& bounds) {
         for (int axis = 0; axis < 3; ++axis) {
@@ -159,7 +161,7 @@ namespace {
     const glm::vec3 centroidExtent = centroidBounds.Max - centroidBounds.Min;
     const float largestCentroidExtent = glm::max(centroidExtent.x,glm::max(centroidExtent.y, centroidExtent.z));
 
-    if (primitiveCount <= leafSize || largestCentroidExtent < 1e-8f) {
+    if (primitiveCount <= leafSize || largestCentroidExtent < EPSILON) {
         GpuBvhNode& node = nodes[nodeIndex];
         node.BoundsMin = glm::vec4(nodeBounds.Min,0.0f);
         node.BoundsMax = glm::vec4(nodeBounds.Max,0.0f);
@@ -237,7 +239,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
 
     std::vector<PrimitiveReference> references;
     references.reserve(sceneSpheres.size() + sceneQuads.size() + sceneTris.size() + sceneInstances.size());
-    
+
     auto addReference = [&](const ScenePrimitiveRecord& primitive,
         std::uint32_t transformIndex, const glm::mat4& objectToWorld) {
             const Bounds localBounds = GetPrimitiveLocalBounds(scene, primitive);
@@ -265,6 +267,17 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
         addReference(ScenePrimitiveRecord{
             ScenePrimitiveType::Triangle,triIndex},0, identity);
     }
+    for (const SceneInstance& instance : sceneInstances) {
+        const std::uint32_t transformIndex = static_cast<std::uint32_t>(result.Transforms.size());
+        GpuTransform gpuTransform;
+        gpuTransform.ObjectToWorld = instance.objectToWorld;
+        gpuTransform.WorldToObject = glm::inverse(instance.objectToWorld);
+        result.Transforms.push_back(gpuTransform);
+        addReference(instance.primitive, transformIndex, instance.objectToWorld);
+    }
+
+
+
 
 
 
