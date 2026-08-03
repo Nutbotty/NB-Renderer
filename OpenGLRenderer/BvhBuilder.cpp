@@ -254,7 +254,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
             references.push_back(reference);
     };
 
-    const glm::mat4 identity{1.0f};
+    constexpr glm::mat4 identity{1.0f};
     for (std::uint32_t sphereIndex = 0; sphereIndex < sceneSpheres.size(); ++sphereIndex) {
         addReference(ScenePrimitiveRecord{
                 ScenePrimitiveType::Sphere,sphereIndex},0,identity);
@@ -268,7 +268,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
             ScenePrimitiveType::Triangle,triIndex},0, identity);
     }
     for (const SceneInstance& instance : sceneInstances) {
-        const std::uint32_t transformIndex = static_cast<std::uint32_t>(result.Transforms.size());
+        const auto transformIndex = static_cast<std::uint32_t>(result.Transforms.size());
         GpuTransform gpuTransform;
         gpuTransform.ObjectToWorld = instance.objectToWorld;
         gpuTransform.WorldToObject = glm::inverse(instance.objectToWorld);
@@ -283,7 +283,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
     result.Nodes.reserve(references.size() * 2);
     BuildBvhNode(references, result.Nodes, 0, static_cast<std::uint32_t>(references.size()), leafSize);
     result.PrimitiveRefs.reserve(references.size());
-    
+
     for (const PrimitiveReference& reference :references) {
         GpuPrimitiveRef gpuReference;
         gpuReference.Metadata = glm::ivec4(
