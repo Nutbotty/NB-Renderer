@@ -13,20 +13,22 @@
 
 namespace {
 // settings
-const unsigned int SCR_WIDTH = 2560;
-const unsigned int SCR_HEIGHT = 1440;
-bool TRACE = true;
+    const unsigned int SCR_WIDTH = 2560;
+    const unsigned int SCR_HEIGHT = 1440;
+    bool TRACE = true;
+    constexpr float EPSILON = 1e-8f;
 
-constexpr GLuint MaterialBufferBinding = 1;
-constexpr GLuint SphereBufferBinding = 2;
-constexpr GLuint BvhBufferBinding = 3;
-constexpr GLuint QuadBufferBinding = 4;
-constexpr GLuint TriangleBufferBinding = 5;
-constexpr GLuint PrimitiveRefBufferBinding = 6;
-constexpr unsigned int ComputeLocalSizeX = 16;
-constexpr unsigned int ComputeLocalSizeY = 16;
-const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
-const GLuint groupCountY = (SCR_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
+    constexpr GLuint MaterialBufferBinding = 1;
+    constexpr GLuint SphereBufferBinding = 2;
+    constexpr GLuint BvhBufferBinding = 3;
+    constexpr GLuint QuadBufferBinding = 4;
+    constexpr GLuint TriangleBufferBinding = 5;
+    constexpr GLuint PrimitiveRefBufferBinding = 6;
+    constexpr GLuint TransformBufferBinding = 7;
+    constexpr unsigned int ComputeLocalSizeX = 16;
+    constexpr unsigned int ComputeLocalSizeY = 16;
+    const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
+    const GLuint groupCountY = (SCR_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
 
 
 
@@ -59,37 +61,33 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,0);
     return buffer;
 }
-
-    struct CameraState {
+struct CameraState {
     glm::vec3 Position{0.0f};
     glm::vec3 Front{0.0f};
     glm::vec3 Up{0.0f};
-
     float Zoom = 20.0f;
     float FocusDistance = 0.0f;
     float DefocusAngle = 0.0f;
 };
 
-    CameraState CaptureCameraState(const EditorCamera& editorCamera) {
-        CameraState state;
-        state.Position = editorCamera.LookFrom;
-        state.Front = editorCamera.LookAt;
-        state.Up = editorCamera.VUp;
-        state.Zoom = editorCamera.VerticalFov;
-        state.FocusDistance = editorCamera.FocusDistance;
-        state.DefocusAngle = editorCamera.DefocusAngle;
-        return state;
-    }
+CameraState CaptureCameraState(const EditorCamera& editorCamera) {
+    CameraState state;
+    state.Position = editorCamera.LookFrom;
+    state.Front = editorCamera.LookAt;
+    state.Up = editorCamera.VUp;
+    state.Zoom = editorCamera.VerticalFov;
+    state.FocusDistance = editorCamera.FocusDistance;
+    state.DefocusAngle = editorCamera.DefocusAngle;
+    return state;
+}
 
-    bool NearlyEqual(const glm::vec3& left, const glm::vec3& right, float epsilon = 1e-8f) {
+    bool NearlyEqual(const glm::vec3& left, const glm::vec3& right) {
         const glm::vec3 difference = left - right;
-        return glm::dot(difference,difference) <= epsilon * epsilon;
+        return glm::dot(difference,difference) <= EPSILON * EPSILON;
     }
-
-    bool NearlyEqual(float left, float right, float epsilon = 1e-8f) {
-        return std::abs(left - right) <= epsilon;
+    bool NearlyEqual(float left, float right) {
+        return std::abs(left - right) <= EPSILON;
     }
-
     bool CameraStateChanged(const CameraState& previous, const CameraState& current) {
         return
             !NearlyEqual(previous.Position, current.Position) ||
@@ -105,6 +103,7 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
 void viewport(const Scene& scene) {
     const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
     const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
+
     const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
     const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.Nodes;
 
@@ -125,31 +124,20 @@ void viewport(const Scene& scene) {
     Shader ourShader("OpenGLRenderer/Shaders/shader.vs", "OpenGLRenderer/Shaders/shader.fs"); // you can name your shader files however you like
     Shader computeShader("OpenGLRenderer/Shaders/editor.comp");
     Shader fullscreenShader("OpenGLRenderer/Shaders/render.vs","OpenGLRenderer/Shaders/render.fs");
-    const GLuint materialBuffer = CreateStorageBuffer(
-        MaterialBufferBinding,
-        gpuMaterials.data(),
+    const GLuint materialBuffer = CreateStorageBuffer(MaterialBufferBinding, gpuMaterials.data(),
         gpuMaterials.size() * sizeof(GpuMaterial));
-
-    const GLuint sphereBuffer = CreateStorageBuffer(
-        SphereBufferBinding,
-        gpuSpheres.data(),
+    const GLuint sphereBuffer = CreateStorageBuffer(SphereBufferBinding,gpuSpheres.data(),
         gpuSpheres.size() * sizeof(GpuSphere));
-    const GLuint bvhBuffer =
-        CreateStorageBuffer(
-            BvhBufferBinding,
-            gpuBvhNodes.data(),
-            static_cast<GLsizeiptr>(
-                gpuBvhNodes.size()
-                * sizeof(GpuBvhNode)
-            )
-        );
+    const GLuint bvhBuffer =CreateStorageBuffer(BvhBufferBinding, gpuBvhNodes.data(),
+            static_cast<GLsizeiptr>(gpuBvhNodes.size() * sizeof(GpuBvhNode)));
     const GLuint quadBuffer =CreateStorageBuffer(QuadBufferBinding,gpuBvh.Quads.data(),
         static_cast<GLsizeiptr>(gpuBvh.Quads.size()* sizeof(GpuQuad)));
-
     const GLuint triangleBuffer = CreateStorageBuffer(TriangleBufferBinding,
         gpuBvh.Tris.data(),static_cast<GLsizeiptr>(gpuBvh.Tris.size()* sizeof(GpuTri)));
     const GLuint primitiveRefBuffer = CreateStorageBuffer(PrimitiveRefBufferBinding,
         gpuBvh.PrimitiveRefs.data(),static_cast<GLsizeiptr>(gpuBvh.PrimitiveRefs.size()* sizeof(GpuPrimitiveRef)));
+    const GLuint transformBuffer = CreateStorageBuffer(TransformBufferBinding,
+        gpuBvh.Transforms.data(), static_cast<GLsizeiptr>(gpuBvh.Transforms.size() * sizeof(GpuTransform)));
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -250,14 +238,9 @@ void viewport(const Scene& scene) {
     std::uint32_t accumulationFrame =
     0;
 
-    CameraState previousCameraState =
-        CaptureCameraState(camera);
-
-    bool previousTraceMode =
-        TRACE;
-
-    constexpr std::uint32_t MaxAccumulationFrames =
-        4096;
+    CameraState previousCameraState = CaptureCameraState(camera);
+    bool previousTraceMode = TRACE;
+    constexpr std::uint32_t MaxAccumulationFrames = 4096;
 
     while (!window.ShouldClose())
     {
@@ -269,20 +252,10 @@ void viewport(const Scene& scene) {
         // input
         // -----
         input.Update(deltaTime);
-        /*
-     * Detect changes before dispatching.
-     */
-        const CameraState currentCameraState =
-            CaptureCameraState(camera);
 
-        const bool cameraChanged =
-            CameraStateChanged(
-                previousCameraState,
-                currentCameraState
-            );
-
-        const bool traceModeChanged =
-            TRACE != previousTraceMode;
+        const CameraState currentCameraState = CaptureCameraState(camera);
+        const bool cameraChanged = CameraStateChanged(previousCameraState, currentCameraState);
+        const bool traceModeChanged = TRACE != previousTraceMode;
 
         if (cameraChanged || traceModeChanged)
         {
@@ -299,6 +272,7 @@ void viewport(const Scene& scene) {
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,QuadBufferBinding,quadBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,TriangleBufferBinding,triangleBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,PrimitiveRefBufferBinding,primitiveRefBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,TransformBufferBinding,transformBuffer);
 
                 glBindImageTexture(
                     0,
@@ -399,6 +373,7 @@ void viewport(const Scene& scene) {
     glDeleteTextures(1, &outputTexture);
     glDeleteBuffers(1, &materialBuffer);
     glDeleteBuffers(1, &sphereBuffer);
+    glDeleteBuffers(1, &transformBuffer);
     glDeleteProgram(computeShader.ID);
     glDeleteProgram(fullscreenShader.ID);
 
