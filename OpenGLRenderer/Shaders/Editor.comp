@@ -405,31 +405,38 @@ bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
     setFaceNormal(r, normal, record);
     return true;
 }
+bool hitLocalPrimitive(int primitiveType, int primitiveIndex, Ray r, Interval rT, out HitRecord record) {
+    if (primitiveType == PRIMITIVE_SPHERE) {
+        return false;
+    } else if (primitiveType == PRIMITIVE_QUAD) {
+        return hitQuad(primitiveIndex, r, rT, record);
+    } else if (primitiveType == PRIMITIVE_TRI) {
+        return hitTri(primitiveIndex, r, rT, record);
+    }
+    return false;
+}
 bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRecord record) {
     int primitiveType = primitiveRef.metadata.x;
     int primitiveIndex = primitiveRef.metadata.y;
     int transformIndex = primitiveRef.metadata.z;
-    PackedTransform instanceTransform = transformBuffer[transformIndex];
-    Ray localRay = transformRay(instanceTransform.worldToObject, r);
+    if (transformIndex == 0) {
+        return hitLocalPrimitive(primitiveType, primitiveIndex, r, rT,record);
+    }
+
+    mat4 worldToObject = transformBuffer[transformIndex].worldToObject;
+    Ray localRay;
+    localRay.origin = (worldToObject * vec4(r.origin, 1.0)).xyz;
+    localRay.direction = (worldToObject * vec4(r.direction, 0.0)).xyz;
 
     HitRecord localRecord;
-    bool hit = false;
-
-    if (primitiveType == PRIMITIVE_SPHERE) {
-        return false;
-    } else if (primitiveType == PRIMITIVE_QUAD) {
-        hit = hitQuad(primitiveIndex, localRay, rT, localRecord);
-    } else if (primitiveType == PRIMITIVE_TRI) {
-        hit = hitTri(primitiveIndex, localRay, rT, localRecord);
-    }
-    if (!hit) {
+    if (!hitLocalPrimitive(primitiveType, primitiveIndex, localRay, rT, localRecord)) {
         return false;
     }
     record = localRecord;
-    record.p = transformPoint(instanceTransform.objectToWorld, localRecord.p);
-    vec3 localOutwardNormal = localRecord.frontFace? localRecord.normal: -localRecord.normal;
-    mat3 normalMatrix = transpose(mat3(instanceTransform.worldToObject));
-    vec3 worldOutwardNormal = normalize(normalMatrix * localOutwardNormal);
+    record.p = rayAt(r, localRecord.t);
+    vec3 localOutwardNormal = localRecord.frontFace ? localRecord.normal : -localRecord.normal;
+    mat3 normalToWorld = transpose(mat3(worldToObject));
+    vec3 worldOutwardNormal = normalize(normalToWorld * localOutwardNormal);
     setFaceNormal(r, worldOutwardNormal, record);
     return true;
 }
