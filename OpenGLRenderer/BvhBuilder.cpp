@@ -8,14 +8,13 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <vector>
 
 #include "../Scene/Scene.h"
 
 namespace {
-
-    const float PADDING = 0.0001f;
-
+    constexpr float PADDING = 0.0001f;
     struct Bounds {
         glm::vec3 Min{std::numeric_limits<float>::max()};
         glm::vec3 Max{std::numeric_limits<float>::lowest()};
@@ -30,18 +29,27 @@ namespace {
             Expand(bounds.Max);
         }
     };
-
     struct PrimitiveReference {
         GpuPrimitiveType Type = GpuPrimitiveType::Sphere;
         std::uint32_t PrimitiveIndex = 0;
+        std::uint32_t TransformIndex = 0;
         Bounds BoundingBox;
         glm::vec3 Centroid{0.0, 0.0, 0.0};
     };
 
+    void PadDegenerateAxes(Bounds& bounds) {
+        for (int axis = 0; axis < 3; ++axis) {
+            const float axisExtent = bounds.Max[axis] - bounds.Min[axis];
+            if (axisExtent < PADDING) {
+                const float axisPadding = 0.5f * (PADDING - axisExtent);
+                bounds.Min[axis] -= axisPadding;
+                bounds.Max[axis] += axisPadding;
+            }
+        }
+    }
+
     Bounds GetSphereBounds(const SceneSphere &sphere) {
-        const glm::vec3 radius{
-            std::abs(sphere.radius)
-        };
+        const glm::vec3 radius{std::abs(sphere.radius)};
         Bounds bounds;
         bounds.Min = sphere.center - radius;
         bounds.Max = sphere.center + radius;
@@ -50,18 +58,11 @@ namespace {
 
     Bounds GetQuadBounds(const SceneQuad &quad) {
         Bounds bounds;
-        const glm::vec3 Q = quad.Q;
-        const glm::vec3 u = quad.Q + quad.u;
-        const glm::vec3 v = quad.Q + quad.v;
-        const glm::vec3 w = quad.Q + quad.u  + quad.v;
-
-        bounds.Expand(Q);
-        bounds.Expand(u);
-        bounds.Expand(v);
-        bounds.Expand(w);
-
-        bounds.Min -= glm::vec3(PADDING);
-        bounds.Max += glm::vec3(PADDING);
+        bounds.Expand(quad.Q);
+        bounds.Expand(quad.Q + quad.u);
+        bounds.Expand(quad.Q + quad.v);
+        bounds.Expand(quad.Q + quad.u  + quad.v);
+        PadDegenerateAxes(bounds);
         return bounds;
     }
 
@@ -70,16 +71,80 @@ namespace {
         bounds.Expand(tri.Q);
         bounds.Expand(tri.Q + tri.U);
         bounds.Expand(tri.Q + tri.V);
-
-        bounds.Min -= glm::vec3(PADDING);
-        bounds.Max += glm::vec3(PADDING);
+        PadDegenerateAxes(bounds);
         return bounds;
     }
 
+    GpuPrimitiveType ToGpuPrimitiveType(ScenePrimitiveType type)
+    {
+        switch (type)
+        {
+            case ScenePrimitiveType::Sphere:
+                return GpuPrimitiveType::Sphere;
+
+            case ScenePrimitiveType::Quad:
+                return GpuPrimitiveType::Quad;
+
+            case ScenePrimitiveType::Triangle:
+                return GpuPrimitiveType::Triangle;
+        }
+    }
+
+    Bounds GetPrimitiveLocalBounds(const Scene& scene, const ScenePrimitiveRecord& primitive) {
+        switch (primitive.type) {
+            case ScenePrimitiveType::Sphere: {
+                return GetSphereBounds(scene.GetSpheres().at(primitive.index));
+            }
+            case ScenePrimitiveType::Quad: {
+                return GetQuadBounds(scene.GetQuads().at(primitive.index));
+            }
+            case ScenePrimitiveType::Triangle: {
+                return GetTriBounds(scene.GetTris().at(primitive.index));
+            }
+        }
+    }
+
+    glm::vec3 GetPrimitiveLocalCentroid(const Scene& scene,const ScenePrimitiveRecord& primitive) {
+        switch (primitive.type) {
+            case ScenePrimitiveType::Sphere: {
+                const SceneSphere& sphere = scene.GetSpheres().at(primitive.index);
+                return sphere.center;
+            }
+            case ScenePrimitiveType::Quad: {
+                const SceneQuad& quad = scene.GetQuads().at(primitive.index);
+                return quad.Q + 0.5f * quad.u + 0.5f * quad.v;
+            }
+            case ScenePrimitiveType::Triangle: {
+                const SceneTri& tri = scene.GetTris().at(primitive.index);
+                return (tri.Q + tri.U + tri.V) / 3.0f;
+            }
+        }
+    }
+
+    glm::vec3 TransformPoint(const glm::mat4& transform, const glm::vec3& point) {
+        const glm::vec4 transformed = transform * glm::vec4(point,1.0f);
+        return glm::vec3(transformed);
+    }
+
+    Bounds TransformBounds(const Bounds& localBounds,const glm::mat4& objectToWorld) {
+        Bounds worldBounds;
+        for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
+            const glm::vec3 localCorner(
+                (cornerIndex & 1) ? localBounds.Max.x : localBounds.Min.x,
+                (cornerIndex & 2) ? localBounds.Max.y : localBounds.Min.y,
+                (cornerIndex & 4) ? localBounds.Max.z: localBounds.Min.z);
+            worldBounds.Expand(TransformPoint(objectToWorld, localCorner));
+        }
+        PadDegenerateAxes(worldBounds);
+        return worldBounds;
+    }
+
     std::uint32_t BuildBvhNode(std::vector<PrimitiveReference> &references,
-    std::vector<GpuBvhNode> &nodes,std::uint32_t begin,
-    std::uint32_t end,std::uint32_t leafSize) {
-    const std::uint32_t nodeIndex = static_cast<std::uint32_t>(nodes.size());
+    std::vector<GpuBvhNode> &nodes,
+    std::uint32_t begin,
+    std::uint32_t end,
+    std::uint32_t leafSize) {
+    const auto nodeIndex = static_cast<std::uint32_t>(nodes.size());
     nodes.emplace_back();
 
     Bounds nodeBounds;
@@ -91,23 +156,18 @@ namespace {
     }
 
     const std::uint32_t primitiveCount = end - begin;
-
     const glm::vec3 centroidExtent = centroidBounds.Max - centroidBounds.Min;
+    const float largestCentroidExtent = glm::max(centroidExtent.x,glm::max(centroidExtent.y, centroidExtent.z));
 
-    const float largestCentroidExtent = glm::max(centroidExtent.x,
-                glm::max(centroidExtent.y, centroidExtent.z));
-
-    if (primitiveCount <= leafSize || largestCentroidExtent < 1e-6f) {
-        GpuBvhNode &node =nodes[nodeIndex];
+    if (primitiveCount <= leafSize || largestCentroidExtent < 1e-8f) {
+        GpuBvhNode& node = nodes[nodeIndex];
         node.BoundsMin = glm::vec4(nodeBounds.Min,0.0f);
         node.BoundsMax = glm::vec4(nodeBounds.Max,0.0f);
-        node.Metadata = glm::ivec4(static_cast<int>(begin),
-            static_cast<int>(primitiveCount),1,0);
+        node.Metadata = glm::ivec4(static_cast<int>(begin), static_cast<int>(primitiveCount),1,0);
         return nodeIndex;
     }
 
     int splitAxis = 0;
-
     if (centroidExtent.y > centroidExtent.x && centroidExtent.y >= centroidExtent.z) {
         splitAxis = 1;
     } else if (centroidExtent.z > centroidExtent.x && centroidExtent.z > centroidExtent.y) {
@@ -116,8 +176,7 @@ namespace {
 
     const std::uint32_t middle = begin + primitiveCount / 2;
 
-    std::nth_element(references.begin() + begin, references.begin() + middle,
-        references.begin() + end,
+    std::nth_element(references.begin() + begin, references.begin() + middle, references.begin() + end,
         [splitAxis](const PrimitiveReference &left, const PrimitiveReference &right) {
             return left.Centroid[splitAxis] < right.Centroid[splitAxis];
         });
@@ -136,64 +195,77 @@ namespace {
 
 BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
     BvhBuildResult result;
-    std::vector<PrimitiveReference> references;
-    references.reserve(scene.GetSpheres().size() + scene.GetQuads().size() + scene.GetTris().size());
+    const auto& sceneSpheres = scene.GetSpheres();
+    const auto& sceneQuads = scene.GetQuads();
+    const auto& sceneTris = scene.GetTris();
+    const auto& sceneInstances = scene.GetInstances();
 
-    const auto &sceneSpheres = scene.GetSpheres();
-    for (std::uint32_t sphereIndex = 0; sphereIndex < sceneSpheres.size(); ++sphereIndex) {
-        const SceneSphere& sphere = sceneSpheres[sphereIndex];
+    result.Spheres.reserve(sceneSpheres.size());
+    result.Quads.reserve(sceneQuads.size());
+    result.Tris.reserve(sceneTris.size());
+
+    for (const SceneSphere& sphere : sceneSpheres) {
         GpuSphere gpuSphere;
         gpuSphere.CenterRadius = glm::vec4(sphere.center, sphere.radius);
         gpuSphere.Metadata = glm::ivec4(sphere.material, 0, 0, 0);
         result.Spheres.push_back(gpuSphere);
-
-
-        PrimitiveReference reference;
-        reference.Type = GpuPrimitiveType::Sphere;
-        reference.PrimitiveIndex = sphereIndex;
-        reference.BoundingBox = GetSphereBounds(sphere);
-        reference.Centroid = sphere.center;
-        references.push_back(reference);
     }
 
-    const auto &sceneQuads = scene.GetQuads();
-    for (std::uint32_t quadIndex = 0; quadIndex < sceneQuads.size(); ++quadIndex) {
-        const SceneQuad& quad = sceneQuads[quadIndex];
+    for (const SceneQuad& quad : sceneQuads) {
         GpuQuad gpuQuad;
         gpuQuad.Q = glm::vec4(quad.Q, 0);
         gpuQuad.u = glm::vec4(quad.u, 0);
         gpuQuad.v = glm::vec4(quad.v, 0);
         gpuQuad.Metadata = glm::vec4(quad.material, 0, 0, 0);
         result.Quads.push_back(gpuQuad);
-
-
-        PrimitiveReference reference;
-        const Bounds bounds = GetQuadBounds(quad);
-        reference.Type = GpuPrimitiveType::Quad;
-        reference.PrimitiveIndex = quadIndex;
-        reference.BoundingBox = bounds;
-        reference.Centroid = (bounds.Min + bounds.Max) * 0.5f;
-        references.push_back(reference);
     }
 
-    const auto &sceneTris = scene.GetTris();
-    for (std::uint32_t triIndex = 0; triIndex < sceneTris.size(); ++triIndex) {
-        const SceneTri& tri = sceneTris[triIndex];
+    for (const SceneTri& tri : sceneTris) {
         GpuTri gpuTri;
         gpuTri.Q = glm::vec4(tri.Q, 0);
         gpuTri.U = glm::vec4(tri.Q + tri.U, 0);
         gpuTri.V = glm::vec4(tri.Q + tri.V, 0);
         gpuTri.Metadata = glm::vec4(tri.material, 0, 0, 0);
         result.Tris.push_back(gpuTri);
-
-        PrimitiveReference reference;
-        const Bounds bounds = GetTriBounds(tri);
-        reference.Type = GpuPrimitiveType::Triangle;
-        reference.PrimitiveIndex = triIndex;
-        reference.BoundingBox = bounds;
-        reference.Centroid = (tri.Q + tri.U + tri.V) / 3.0f;
-        references.push_back(reference);
     }
+
+    GpuTransform identityTransform;
+    identityTransform.ObjectToWorld = glm::mat4(1.0f);
+    identityTransform.WorldToObject = glm::mat4(1.0f);
+    result.Transforms.reserve(sceneInstances.size() + 1);
+    result.Transforms.push_back(identityTransform);
+
+    std::vector<PrimitiveReference> references;
+    references.reserve(sceneSpheres.size() + sceneQuads.size() + sceneTris.size() + sceneInstances.size());
+    
+    auto addReference = [&](const ScenePrimitiveRecord& primitive,
+        std::uint32_t transformIndex, const glm::mat4& objectToWorld) {
+            const Bounds localBounds = GetPrimitiveLocalBounds(scene, primitive);
+            const glm::vec3 localCentroid = GetPrimitiveLocalCentroid(scene, primitive);
+
+            PrimitiveReference reference;
+            reference.Type = ToGpuPrimitiveType(primitive.type);
+            reference.PrimitiveIndex = primitive.index;
+            reference.TransformIndex = transformIndex;
+            reference.BoundingBox = TransformBounds(localBounds, objectToWorld);
+            reference.Centroid = TransformPoint(objectToWorld, localCentroid);
+            references.push_back(reference);
+    };
+
+    const glm::mat4 identity{1.0f};
+    for (std::uint32_t sphereIndex = 0; sphereIndex < sceneSpheres.size(); ++sphereIndex) {
+        addReference(ScenePrimitiveRecord{
+                ScenePrimitiveType::Sphere,sphereIndex},0,identity);
+    }
+    for (std::uint32_t quadIndex = 0; quadIndex < sceneQuads.size(); ++quadIndex) {
+        addReference(ScenePrimitiveRecord{
+                ScenePrimitiveType::Quad,quadIndex},0,identity);
+    }
+    for (std::uint32_t triIndex = 0; triIndex < sceneTris.size(); ++triIndex) {
+        addReference(ScenePrimitiveRecord{
+            ScenePrimitiveType::Triangle,triIndex},0, identity);
+    }
+
 
 
 
