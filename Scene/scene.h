@@ -14,7 +14,10 @@ using SphereId = std::uint32_t;
 using QuadId = std::uint32_t;
 using TriId = std::uint32_t;
 using InstanceId = std::uint32_t;
+using MeshId = std::uint32_t;
+using MeshInstanceId = std::uint32_t;
 
+//materials
 enum class MaterialType : std::uint32_t {
     Lambertian = 0,
     Metal = 1,
@@ -29,6 +32,7 @@ struct SceneMaterial {
     float emissionStrength = 0.0;
 };
 
+//primitive
 enum class ScenePrimitiveType : std::uint32_t {
     Sphere = 0,
     Quad = 1,
@@ -52,13 +56,42 @@ struct SceneTri {
     MaterialId material = 0;
 };
 struct ScenePrimitiveRecord {
-    ScenePrimitiveType type = ScenePrimitiveType::Triangle;
-    std::uint32_t index = 2;
+    ScenePrimitiveType type;
+    std::uint32_t index;
 };
 struct SceneInstance {
     ScenePrimitiveRecord primitive;
     glm::mat4 objectToWorld{1.0f};
 };
+
+//meshes
+struct SceneMeshVertex {
+    glm::vec3 position{0.0f};
+    glm::vec3 normal{0.0f};
+    glm::vec2 texCoord{0.0f};
+};
+struct SceneMeshTriangle {
+    std::uint32_t index0 = 0;
+    std::uint32_t index1 = 0;
+    std::uint32_t index2 = 0;
+    MaterialId material = 0;
+};
+struct SceneMesh {
+    std::vector<SceneMeshVertex> vertices;
+    std::vector<SceneMeshTriangle> triangles;
+    glm::vec3 boundsMin{0.0f};
+    glm::vec3 boundsMax{0.0f};
+    bool hasNormals = false;
+    bool hasTexCoords = false;
+};
+struct SceneMeshInstance {
+    MeshId mesh = 0;
+    glm::mat4 objectToWorld{1.0f};
+};
+
+
+
+//camera
 struct SceneCamera {
     glm::vec3 lookFrom{0.0f, 0.0f, 0.0f};
     glm::vec3 lookAt{0.0f, 0.0f, -1.0f};
@@ -68,9 +101,7 @@ struct SceneCamera {
     float focusDistance = 1.0f;
 };
 
-
-class Scene
-{
+class Scene {
 public:
     Scene() = default;
 
@@ -126,6 +157,9 @@ public:
         MarkDirty();
         return id;
     }
+
+
+
     void SetCamera(const SceneCamera& camera) {
         m_Camera = camera;
         MarkDirty();
@@ -156,6 +190,8 @@ public:
         m_Tris.clear();
         m_Materials.clear();
         m_instances.clear();
+        m_Meshes.clear();
+        m_MeshInstances.clear();
         MarkDirty();
     }
     [[nodiscard]] bool IsDirty() const {
@@ -173,6 +209,10 @@ private:
     std::vector<SceneQuad> m_Quads;
     std::vector<SceneTri> m_Tris;
     std::vector<SceneInstance> m_instances;
+
+    std::vector<SceneMesh> m_Meshes;
+    std::vector<SceneMeshInstance> m_MeshInstances;
+
     SceneCamera m_Camera;
 
     bool m_Dirty = true;
