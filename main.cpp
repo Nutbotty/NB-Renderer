@@ -17,6 +17,7 @@
 #include "Scene/scene.h"
 #include "CPURenderer/CPURenderer.h"
 #include "OpenGLRenderer/OpenGLRenderer.h"
+#include "external/fastgltf/include/fastgltf/core.hpp"
 
 std::vector<std::shared_ptr<material>>
 
