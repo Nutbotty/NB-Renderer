@@ -158,7 +158,34 @@ public:
         return id;
     }
 
+    MeshId addMesh(std::vector<SceneMeshVertex> vertices, std::vector<SceneMeshTriangle> triangles, bool hasNormals, bool hasTexCoords) {
+        glm::vec3 boundsMin = vertices.front().position;
+        glm::vec3 boundsMax = vertices.front().position;
 
+        for (const SceneMeshVertex& vertex : vertices) {
+            boundsMin = glm::min(boundsMin, vertex.position);
+            boundsMax = glm::max(boundsMax, vertex.position);
+        }
+
+        const MeshId id = static_cast<MeshId>(m_Meshes.size());
+
+        SceneMesh mesh;
+        mesh.vertices = std::move(vertices);
+        mesh.triangles = std::move(triangles);
+        mesh.boundsMin = boundsMin;
+        mesh.boundsMax = boundsMax;
+        mesh.hasNormals = hasNormals;
+        mesh.hasTexCoords = hasTexCoords;
+        m_Meshes.push_back(std::move(mesh));
+        MarkDirty();
+        return id;
+    }
+    MeshInstanceId addMeshInstance(MeshId mesh, const glm::mat4& objectToWorld) {
+        const MeshInstanceId id = static_cast<MeshInstanceId>(m_MeshInstances.size());
+        m_MeshInstances.push_back(SceneMeshInstance{mesh, objectToWorld});
+        MarkDirty();
+        return id;
+    }
 
     void SetCamera(const SceneCamera& camera) {
         m_Camera = camera;
@@ -179,6 +206,13 @@ public:
     }
     [[nodiscard]] const std::vector<SceneInstance>& GetInstances() const {
         return m_instances;
+    }
+    [[nodiscard]] const std::vector<SceneMesh>& GetMeshes() const {
+        return m_Meshes;
+    }
+    [[nodiscard]]
+    const std::vector<SceneMeshInstance>& GetMeshInstances() const {
+        return m_MeshInstances;
     }
     [[nodiscard]] const SceneCamera& GetCamera() const {
         return m_Camera;
