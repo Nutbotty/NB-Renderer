@@ -8,13 +8,19 @@
 #pragma once
 
 #include <filesystem>
+#include "../Scene/scene.h"
 
 class Scene;
 
 class GltfLoader {
 public:
     [[nodiscard]]
-    static bool Load(const std::filesystem::path& path, Scene& scene);
+    static bool Load(
+        const std::filesystem::path& path,
+        Scene& scene,
+        const glm::mat4& rootTransform =
+            glm::mat4(1.0f)
+    );
 };
 
 #endif //NB_RENDERER_MODELLOADER_H
