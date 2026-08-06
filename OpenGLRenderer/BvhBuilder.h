@@ -84,9 +84,16 @@ struct BvhBuildResult {
     std::vector<GpuSphere> Spheres;
     std::vector<GpuQuad> Quads;
     std::vector<GpuTri> Tris;
+    std::vector<GpuMeshVertex> MeshVertices;
+    std::vector<GpuMeshTriangle> MeshTriangles;
+    std::vector<GpuMesh> Meshes;
+
+
     std::vector<GpuTransform> Transforms;
     std::vector<GpuPrimitiveRef> PrimitiveRefs;
-    std::vector<GpuBvhNode> Nodes;
+
+    std::vector<GpuBvhNode> TlasNodes;
+    std::vector<GpuBvhNode> BlasNodes;
 };
 
 class Scene;
