@@ -101,7 +101,7 @@ class Scene;
 class BvhBuilder {
 public:
     [[nodiscard]] static BvhBuildResult Build(
-        const Scene &scene, std::uint32_t leafSize = 8);
+        const Scene &scene, std::uint32_t tlasLeafSize = 8, std::uint32_t blasLeafSize = 4);
 };
 
 #endif //NB_RENDERER_BVHBUILDER_H
