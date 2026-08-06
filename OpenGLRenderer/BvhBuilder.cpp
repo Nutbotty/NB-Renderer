@@ -77,6 +77,20 @@ namespace {
         return bounds;
     }
 
+    Bounds GetPrimitiveLocalBounds(const Scene& scene, const ScenePrimitiveRecord& primitive) {
+        switch (primitive.type) {
+            case ScenePrimitiveType::Sphere: {
+                return GetSphereBounds(scene.GetSpheres().at(primitive.index));
+            }
+            case ScenePrimitiveType::Quad: {
+                return GetQuadBounds(scene.GetQuads().at(primitive.index));
+            }
+            case ScenePrimitiveType::Triangle: {
+                return GetTriBounds(scene.GetTris().at(primitive.index));
+            }
+        }
+    }
+
     GpuPrimitiveType ToGpuPrimitiveType(ScenePrimitiveType type)
     {
         switch (type)
@@ -92,18 +106,21 @@ namespace {
         }
     }
 
-    Bounds GetPrimitiveLocalBounds(const Scene& scene, const ScenePrimitiveRecord& primitive) {
-        switch (primitive.type) {
-            case ScenePrimitiveType::Sphere: {
-                return GetSphereBounds(scene.GetSpheres().at(primitive.index));
-            }
-            case ScenePrimitiveType::Quad: {
-                return GetQuadBounds(scene.GetQuads().at(primitive.index));
-            }
-            case ScenePrimitiveType::Triangle: {
-                return GetTriBounds(scene.GetTris().at(primitive.index));
-            }
-        }
+    Bounds GetMeshTriangeBounds(const SceneMesh& mesh, const SceneMeshTriangle& tri) {
+        const glm::vec3& a = mesh.vertices[tri.index0].position;
+        const glm::vec3& b = mesh.vertices[tri.index1].position;
+        const glm::vec3& c = mesh.vertices[tri.index2].position;
+        Bounds bounds;
+        bounds.Expand(a);
+        bounds.Expand(b);
+        bounds.Expand(c);
+        PadDegenerateAxes(bounds);
+    }
+    glm::vec3 GetMeshTriangleCentroid(const SceneMesh& mesh, const SceneMeshTriangle& triangle) {
+        const glm::vec3& a = mesh.vertices[triangle.index0].position;
+        const glm::vec3& b = mesh.vertices[triangle.index1].position;
+        const glm::vec3& c = mesh.vertices[triangle.index2].position;
+        return (a + b + c) / 3.0f;
     }
 
     glm::vec3 GetPrimitiveLocalCentroid(const Scene& scene,const ScenePrimitiveRecord& primitive) {
@@ -122,6 +139,8 @@ namespace {
             }
         }
     }
+
+
 
     glm::vec3 TransformPoint(const glm::mat4& transform, const glm::vec3& point) {
         const glm::vec4 transformed = transform * glm::vec4(point,1.0f);
