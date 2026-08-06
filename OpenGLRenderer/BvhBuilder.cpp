@@ -37,7 +37,11 @@ namespace {
         Bounds BoundingBox;
         glm::vec3 Centroid{0.0, 0.0, 0.0};
     };
-
+    struct MeshTriangleReference {
+        GpuMeshTriangle Triangle;
+        Bounds BoundingBox;
+        glm::vec3 Centroid{0.0f};
+    };
 
     void PadDegenerateAxes(Bounds& bounds) {
         for (int axis = 0; axis < 3; ++axis) {
@@ -57,7 +61,6 @@ namespace {
         bounds.Max = sphere.center + radius;
         return bounds;
     }
-
     Bounds GetQuadBounds(const SceneQuad &quad) {
         Bounds bounds;
         bounds.Expand(quad.Q);
@@ -67,7 +70,6 @@ namespace {
         PadDegenerateAxes(bounds);
         return bounds;
     }
-
     Bounds GetTriBounds(const SceneTri &tri) {
         Bounds bounds;
         bounds.Expand(tri.Q);
@@ -76,7 +78,6 @@ namespace {
         PadDegenerateAxes(bounds);
         return bounds;
     }
-
     Bounds GetPrimitiveLocalBounds(const Scene& scene, const ScenePrimitiveRecord& primitive) {
         switch (primitive.type) {
             case ScenePrimitiveType::Sphere: {
@@ -87,6 +88,22 @@ namespace {
             }
             case ScenePrimitiveType::Triangle: {
                 return GetTriBounds(scene.GetTris().at(primitive.index));
+            }
+        }
+    }
+    glm::vec3 GetPrimitiveLocalCentroid(const Scene& scene,const ScenePrimitiveRecord& primitive) {
+        switch (primitive.type) {
+            case ScenePrimitiveType::Sphere: {
+                const SceneSphere& sphere = scene.GetSpheres().at(primitive.index);
+                return sphere.center;
+            }
+            case ScenePrimitiveType::Quad: {
+                const SceneQuad& quad = scene.GetQuads().at(primitive.index);
+                return quad.Q + 0.5f * quad.u + 0.5f * quad.v;
+            }
+            case ScenePrimitiveType::Triangle: {
+                const SceneTri& tri = scene.GetTris().at(primitive.index);
+                return (tri.Q + tri.U + tri.V) / 3.0f;
             }
         }
     }
@@ -123,30 +140,10 @@ namespace {
         return (a + b + c) / 3.0f;
     }
 
-    glm::vec3 GetPrimitiveLocalCentroid(const Scene& scene,const ScenePrimitiveRecord& primitive) {
-        switch (primitive.type) {
-            case ScenePrimitiveType::Sphere: {
-                const SceneSphere& sphere = scene.GetSpheres().at(primitive.index);
-                return sphere.center;
-            }
-            case ScenePrimitiveType::Quad: {
-                const SceneQuad& quad = scene.GetQuads().at(primitive.index);
-                return quad.Q + 0.5f * quad.u + 0.5f * quad.v;
-            }
-            case ScenePrimitiveType::Triangle: {
-                const SceneTri& tri = scene.GetTris().at(primitive.index);
-                return (tri.Q + tri.U + tri.V) / 3.0f;
-            }
-        }
-    }
-
-
-
     glm::vec3 TransformPoint(const glm::mat4& transform, const glm::vec3& point) {
         const glm::vec4 transformed = transform * glm::vec4(point,1.0f);
         return glm::vec3(transformed);
     }
-
     Bounds TransformBounds(const Bounds& localBounds,const glm::mat4& objectToWorld) {
         Bounds worldBounds;
         for (int cornerIndex = 0; cornerIndex < 8; ++cornerIndex) {
@@ -160,57 +157,103 @@ namespace {
         return worldBounds;
     }
 
-    std::uint32_t BuildBvhNode(std::vector<PrimitiveReference> &references,
-    std::vector<GpuBvhNode> &nodes,
-    std::uint32_t begin,
-    std::uint32_t end,
-    std::uint32_t leafSize) {
-    const auto nodeIndex = static_cast<std::uint32_t>(nodes.size());
-    nodes.emplace_back();
+    std::uint32_t BuildBvhNode(std::vector<PrimitiveReference> &references, std::vector<GpuBvhNode> &nodes,
+        std::uint32_t begin, std::uint32_t end, std::uint32_t leafSize) {
+        const auto nodeIndex = static_cast<std::uint32_t>(nodes.size());
+        nodes.emplace_back();
 
-    Bounds nodeBounds;
-    Bounds centroidBounds;
+        Bounds nodeBounds;
+        Bounds centroidBounds;
 
-    for (std::uint32_t index = begin; index < end; ++index) {
-        nodeBounds.Expand(references[index].BoundingBox);
-        centroidBounds.Expand(references[index].Centroid);
-    }
+        for (std::uint32_t index = begin; index < end; ++index) {
+            nodeBounds.Expand(references[index].BoundingBox);
+            centroidBounds.Expand(references[index].Centroid);
+        }
 
-    const std::uint32_t primitiveCount = end - begin;
-    const glm::vec3 centroidExtent = centroidBounds.Max - centroidBounds.Min;
-    const float largestCentroidExtent = glm::max(centroidExtent.x,glm::max(centroidExtent.y, centroidExtent.z));
+        const std::uint32_t primitiveCount = end - begin;
+        const glm::vec3 centroidExtent = centroidBounds.Max - centroidBounds.Min;
+        const float largestCentroidExtent = glm::max(centroidExtent.x,glm::max(centroidExtent.y, centroidExtent.z));
 
-    if (primitiveCount <= leafSize || largestCentroidExtent < EPSILON) {
+        if (primitiveCount <= leafSize || largestCentroidExtent < EPSILON) {
+            GpuBvhNode& node = nodes[nodeIndex];
+            node.BoundsMin = glm::vec4(nodeBounds.Min,0.0f);
+            node.BoundsMax = glm::vec4(nodeBounds.Max,0.0f);
+            node.Metadata = glm::ivec4(static_cast<int>(begin), static_cast<int>(primitiveCount),1,0);
+            return nodeIndex;
+        }
+
+        int splitAxis = 0;
+        if (centroidExtent.y > centroidExtent.x && centroidExtent.y >= centroidExtent.z) {
+            splitAxis = 1;
+        } else if (centroidExtent.z > centroidExtent.x && centroidExtent.z > centroidExtent.y) {
+            splitAxis = 2;
+        }
+
+        const std::uint32_t middle = begin + primitiveCount / 2;
+
+        std::nth_element(references.begin() + begin, references.begin() + middle, references.begin() + end,
+            [splitAxis](const PrimitiveReference &left, const PrimitiveReference &right) {
+                return left.Centroid[splitAxis] < right.Centroid[splitAxis];
+            });
+
+        const std::uint32_t leftChild = BuildBvhNode(references,nodes, begin,middle, leafSize);
+        const std::uint32_t rightChild = BuildBvhNode(references,nodes,middle,end, leafSize);
+
         GpuBvhNode& node = nodes[nodeIndex];
         node.BoundsMin = glm::vec4(nodeBounds.Min,0.0f);
         node.BoundsMax = glm::vec4(nodeBounds.Max,0.0f);
-        node.Metadata = glm::ivec4(static_cast<int>(begin), static_cast<int>(primitiveCount),1,0);
+        node.Metadata = glm::ivec4(static_cast<int>(leftChild),static_cast<int>(rightChild),0,0);\
         return nodeIndex;
     }
+    std::uint32_t BuildMeshBvhNode(std::vector<MeshTriangleReference>& references, std::vector<GpuBvhNode>& nodes,
+        std::uint32_t begin,std::uint32_t end, std::uint32_t leafSize, std::uint32_t firstOutputTriangle) {
+        const std::uint32_t nodeIndex = static_cast<std::uint32_t>(nodes.size());
+        nodes.emplace_back();
 
-    int splitAxis = 0;
-    if (centroidExtent.y > centroidExtent.x && centroidExtent.y >= centroidExtent.z) {
-        splitAxis = 1;
-    } else if (centroidExtent.z > centroidExtent.x && centroidExtent.z > centroidExtent.y) {
-        splitAxis = 2;
+        Bounds nodeBounds;
+        Bounds centroidBounds;
+
+        for (std::uint32_t index = begin; index < end; ++index) {
+            nodeBounds.Expand(references[index].BoundingBox);
+            centroidBounds.Expand(references[index].Centroid);
+        }
+
+        const uint32_t triCount = end - begin;
+        const glm::vec3 centroidExtent = centroidBounds.Max - centroidBounds.Min;
+        const float largestExtent = glm::max(centroidExtent.x, glm::max(centroidExtent.y, centroidExtent.z));
+        // BLAS leaf
+        if (triCount <= leafSize || largestExtent < EPSILON) {
+            GpuBvhNode& node = nodes[nodeIndex];
+            node.BoundsMin = glm::vec4(nodeBounds.Min,0.0f);
+            node.BoundsMax = glm::vec4(nodeBounds.Max,0.0f);
+            node.Metadata = glm::ivec4(static_cast<int>(firstOutputTriangle + begin),
+                static_cast<int>(triCount), 1, 0);
+            return nodeIndex;
+        }
+
+        int splitAxis = 0;
+        if (centroidExtent.y > centroidExtent.x && centroidExtent.y >= centroidExtent.z) {
+            splitAxis = 1;
+        } else if (centroidExtent.z > centroidExtent.x && centroidExtent.z > centroidExtent.y) {
+            splitAxis = 2;
+        }
+        const std::uint32_t middle = begin + triCount / 2;
+
+        std::nth_element(references.begin() + begin, references.begin() + middle, references.begin() + end,
+            [splitAxis](const MeshTriangleReference &left, const MeshTriangleReference &right) {
+                return left.Centroid[splitAxis] < right.Centroid[splitAxis];
+            });
+
+        const std::uint32_t leftChild = BuildMeshBvhNode(
+            references,nodes, begin,middle, leafSize, firstOutputTriangle);
+        const std::uint32_t rightChild = BuildMeshBvhNode(
+            references,nodes,middle,end, leafSize, firstOutputTriangle);
+        GpuBvhNode& node = nodes[nodeIndex];
+        node.BoundsMin = glm::vec4(nodeBounds.Min, 0.0f);
+        node.BoundsMax = glm::vec4(nodeBounds.Max, 0.0f);
+        node.Metadata = glm::ivec4(static_cast<int>(leftChild), static_cast<int>(rightChild), 0, 0);
+        return nodeIndex;
     }
-
-    const std::uint32_t middle = begin + primitiveCount / 2;
-
-    std::nth_element(references.begin() + begin, references.begin() + middle, references.begin() + end,
-        [splitAxis](const PrimitiveReference &left, const PrimitiveReference &right) {
-            return left.Centroid[splitAxis] < right.Centroid[splitAxis];
-        });
-
-    const std::uint32_t leftChild = BuildBvhNode(references,nodes, begin,middle, leafSize);
-    const std::uint32_t rightChild = BuildBvhNode(references,nodes,middle,end, leafSize);
-
-    GpuBvhNode &node = nodes[nodeIndex];
-    node.BoundsMin = glm::vec4(nodeBounds.Min,0.0f);
-    node.BoundsMax = glm::vec4(nodeBounds.Max,0.0f);
-    node.Metadata = glm::ivec4(static_cast<int>(leftChild),static_cast<int>(rightChild),0,0);\
-    return nodeIndex;
-}
 }
 
 
