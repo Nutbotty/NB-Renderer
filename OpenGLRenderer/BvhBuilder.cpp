@@ -381,6 +381,36 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
         result.Meshes.push_back(gpuMesh);
     }
 
+    const auto& meshInstances = scene.GetMeshInstances();
+    for (const SceneMeshInstance& meshInstance : meshInstances) {
+        const auto transformIndex = static_cast<std::uint32_t>(result.Transforms.size());
+        GpuTransform gpuTransform;
+        gpuTransform.ObjectToWorld = meshInstance.objectToWorld;
+        gpuTransform.WorldToObject = glm::inverse(meshInstance.objectToWorld);
+        result.Transforms.push_back(gpuTransform);
+
+        const SceneMesh& mesh = sceneMeshes[meshInstance.mesh];
+        Bounds localBounds;
+        localBounds.Min = mesh.boundsMin;
+        localBounds.Max = mesh.boundsMax;
+
+        PrimitiveReference reference;
+        reference.Type = GpuPrimitiveType::Mesh;
+        reference.PrimitiveIndex = meshInstance.mesh;
+        reference.TransformIndex = transformIndex;
+        reference.BoundingBox = TransformBounds(localBounds, meshInstance.objectToWorld);
+        const glm::vec3 localCentroid = 0.5f * (mesh.boundsMin + mesh.boundsMax);
+        reference.Centroid = TransformPoint(meshInstance.objectToWorld, localCentroid);
+        references.push_back(reference);
+    }
+
+
+
+
+
+
+
+
     if (references.empty()) {
         return result;
     }
