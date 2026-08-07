@@ -404,19 +404,14 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
         references.push_back(reference);
     }
 
-
-
-
-
-
-
-
     if (references.empty()) {
         return result;
     }
-    leafSize = std::max(leafSize,std::uint32_t{1});
-    result.Nodes.reserve(references.size() * 2);
-    BuildBvhNode(references, result.Nodes, 0, static_cast<std::uint32_t>(references.size()), leafSize);
+    tlasLeafSize = std::max(tlasLeafSize, std::uint32_t{1});
+    result.TlasNodes.reserve(references.size() * 2);
+    const std::uint32_t rootNode = BuildBvhNode(references, result.TlasNodes, 0,
+        static_cast<std::uint32_t>(references.size()), tlasLeafSize);
+    assert(rootNode == 0);
     result.PrimitiveRefs.reserve(references.size());
 
     for (const PrimitiveReference& reference :references) {
