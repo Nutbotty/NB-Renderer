@@ -103,7 +103,7 @@ namespace {
             }
             case ScenePrimitiveType::Triangle: {
                 const SceneTri& tri = scene.GetTris().at(primitive.index);
-                return (tri.Q + tri.U + tri.V) / 3.0f;
+                return tri.Q + (tri.U + tri.V) / 3.0f;
             }
         }
     }
@@ -132,6 +132,7 @@ namespace {
         bounds.Expand(b);
         bounds.Expand(c);
         PadDegenerateAxes(bounds);
+        return bounds;
     }
     glm::vec3 GetMeshTriangleCentroid(const SceneMesh& mesh, const SceneMeshTriangle& triangle) {
         const glm::vec3& a = mesh.vertices[triangle.index0].position;
@@ -355,8 +356,8 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
             MeshTriangleReference reference;
             reference.Triangle.MetaData = glm::ivec4(
                 static_cast<int>(firstVertex + tri.index0),
-                static_cast<int>(firstVertex + tri.index0),
-                static_cast<int>(firstVertex + tri.index0),
+                static_cast<int>(firstVertex + tri.index1),
+                static_cast<int>(firstVertex + tri.index2),
                 static_cast<int>(tri.material));
             reference.BoundingBox = GetMeshTriangeBounds(mesh, tri);
             reference.Centroid = GetMeshTriangleCentroid(mesh, tri);
