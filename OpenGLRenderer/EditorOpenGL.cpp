@@ -20,11 +20,17 @@ namespace {
 
     constexpr GLuint MaterialBufferBinding = 1;
     constexpr GLuint SphereBufferBinding = 2;
-    constexpr GLuint BvhBufferBinding = 3;
+    constexpr GLuint TlasBufferBinding = 3;
     constexpr GLuint QuadBufferBinding = 4;
     constexpr GLuint TriangleBufferBinding = 5;
     constexpr GLuint PrimitiveRefBufferBinding = 6;
     constexpr GLuint TransformBufferBinding = 7;
+    constexpr GLuint MeshVertexBufferBinding   = 8;
+    constexpr GLuint MeshTriangleBufferBinding = 9;
+    constexpr GLuint MeshBufferBinding         = 10;
+    constexpr GLuint BlasBufferBinding         = 11;
+    constexpr std::uint32_t TlasLeafSize = 8;
+    constexpr std::uint32_t BlasLeafSize = 4;
     constexpr unsigned int ComputeLocalSizeX = 16;
     constexpr unsigned int ComputeLocalSizeY = 16;
     const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
@@ -102,10 +108,10 @@ CameraState CaptureCameraState(const EditorCamera& editorCamera) {
 
 void viewport(const Scene& scene) {
     const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
-    const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
+    const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,TlasLeafSize, BlasLeafSize);
 
     const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
-    const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.Nodes;
+    const std::vector<GpuBvhNode> &gpuTlasNodes = gpuBvh.TlasNodes;
 
     EditorCamera camera(scene.GetCamera());
 
@@ -128,9 +134,9 @@ void viewport(const Scene& scene) {
         gpuMaterials.size() * sizeof(GpuMaterial));
     const GLuint sphereBuffer = CreateStorageBuffer(SphereBufferBinding,gpuSpheres.data(),
         gpuSpheres.size() * sizeof(GpuSphere));
-    const GLuint bvhBuffer =CreateStorageBuffer(BvhBufferBinding, gpuBvhNodes.data(),
-            static_cast<GLsizeiptr>(gpuBvhNodes.size() * sizeof(GpuBvhNode)));
-    const GLuint quadBuffer =CreateStorageBuffer(QuadBufferBinding,gpuBvh.Quads.data(),
+    const GLuint tlasBuffer = CreateStorageBuffer(TlasBufferBinding, gpuTlasNodes.data(),
+            static_cast<GLsizeiptr>(gpuTlasNodes.size() * sizeof(GpuBvhNode)));
+    const GLuint quadBuffer = CreateStorageBuffer(QuadBufferBinding,gpuBvh.Quads.data(),
         static_cast<GLsizeiptr>(gpuBvh.Quads.size()* sizeof(GpuQuad)));
     const GLuint triangleBuffer = CreateStorageBuffer(TriangleBufferBinding,
         gpuBvh.Tris.data(),static_cast<GLsizeiptr>(gpuBvh.Tris.size()* sizeof(GpuTri)));
@@ -138,6 +144,14 @@ void viewport(const Scene& scene) {
         gpuBvh.PrimitiveRefs.data(),static_cast<GLsizeiptr>(gpuBvh.PrimitiveRefs.size()* sizeof(GpuPrimitiveRef)));
     const GLuint transformBuffer = CreateStorageBuffer(TransformBufferBinding,
         gpuBvh.Transforms.data(), static_cast<GLsizeiptr>(gpuBvh.Transforms.size() * sizeof(GpuTransform)));
+    const GLuint meshVertexBuffer = CreateStorageBuffer(MeshVertexBufferBinding,
+        gpuBvh.MeshVertices.data(), static_cast<GLsizeiptr>(gpuBvh.MeshVertices.size() * sizeof(GpuMeshVertex)));
+    const GLuint meshTriangleBuffer = CreateStorageBuffer(MeshTriangleBufferBinding,
+        gpuBvh.MeshTriangles.data(), static_cast<GLsizeiptr>(gpuBvh.MeshTriangles.size() * sizeof(GpuMeshTriangle)));
+    const GLuint meshBuffer = CreateStorageBuffer(MeshBufferBinding,
+        gpuBvh.Meshes.data(), static_cast<GLsizeiptr>(gpuBvh.Meshes.size() * sizeof(GpuMesh)));
+    const GLuint blasBuffer = CreateStorageBuffer(BlasBufferBinding,
+        gpuBvh.BlasNodes.data(), static_cast<GLsizeiptr>(gpuBvh.BlasNodes.size() * sizeof(GpuBvhNode)));
 
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
@@ -268,11 +282,15 @@ void viewport(const Scene& scene) {
                 computeShader.use();
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,MaterialBufferBinding,materialBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,SphereBufferBinding,sphereBuffer);
-                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,BvhBufferBinding,bvhBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER,TlasBufferBinding,tlasBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,QuadBufferBinding,quadBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,TriangleBufferBinding,triangleBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,PrimitiveRefBufferBinding,primitiveRefBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER,TransformBufferBinding,transformBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshVertexBufferBinding, meshVertexBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshTriangleBufferBinding, meshTriangleBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshBufferBinding, meshBuffer);
+                glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BlasBufferBinding, blasBuffer);
 
                 glBindImageTexture(
                     0,
@@ -284,7 +302,8 @@ void viewport(const Scene& scene) {
                     GL_RGBA32F
                 );
                 computeShader.setUInt("uFrameIndex", accumulationFrame);
-                computeShader.setInt("uBvhNodeCount", static_cast<int>(gpuBvhNodes.size()));
+                computeShader.setInt("uTlasNodeCount", static_cast<int>(gpuTlasNodes.size()));
+
                 computeShader.setVec3("uCameraLookFrom",camera.LookFrom);
                 computeShader.setVec3("uCameraLookAt",camera.LookAt);
                 computeShader.setVec3("uCameraVUp",camera.VUp);
@@ -373,10 +392,20 @@ void viewport(const Scene& scene) {
     glDeleteTextures(1, &outputTexture);
     glDeleteBuffers(1, &materialBuffer);
     glDeleteBuffers(1, &sphereBuffer);
+    glDeleteBuffers(1, &tlasBuffer);
+    glDeleteBuffers(1, &quadBuffer);
+    glDeleteBuffers(1, &triangleBuffer);
+    glDeleteBuffers(1, &primitiveRefBuffer);
     glDeleteBuffers(1, &transformBuffer);
+    glDeleteBuffers(1, &meshVertexBuffer);
+    glDeleteBuffers(1, &meshTriangleBuffer);
+    glDeleteBuffers(1, &meshBuffer);
+    glDeleteBuffers(1, &blasBuffer);
     glDeleteProgram(computeShader.ID);
     glDeleteProgram(fullscreenShader.ID);
-
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     return;
