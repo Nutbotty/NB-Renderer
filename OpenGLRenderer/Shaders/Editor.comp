@@ -6,13 +6,15 @@ const int MATERIAL_DIELECTRIC = 2;
 const int PRIMITIVE_SPHERE   = 0;
 const int PRIMITIVE_QUAD     = 1;
 const int PRIMITIVE_TRI = 2;
+const int PRIMITIVE_MESH = 3;
+const int TLAS_STACK_SIZE = 32;
+const int BLAS_STACK_SIZE = 64;
 
 const float EPSILON = 1e-8;
 const float MAX_RAY_DISTANCE = 1e30;
 const int SAMPLES_PER_PIXEL = 5;
 const int SAMPLES_PER_DISPATCH = 1;
 const int MAX_DEPTH = 8;
-const int BVH_STACK_SIZE = 32;
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform image2D outputImage;
@@ -21,6 +23,11 @@ struct PackedMaterial {
     vec4 optical;
     vec4 emission;
     ivec4 metadata;
+};
+struct Sphere {
+    vec3 center;
+    float radius;
+    int material;
 };
 struct PackedSphere {
     vec4 centerRadius;
@@ -52,6 +59,27 @@ struct PackedPrimitiveRef {
  */
     ivec4 metadata;
 };
+struct PackedMeshVertex {
+    vec4 position;
+    vec4 normal;
+};
+struct PackedMeshTriangle {
+/*
+ * x = v0, y = v1, z = v2, w = mat
+ */
+    ivec4 metadata;
+};
+struct PackedMesh {
+    vec4 boundsMin;
+    vec4 boundsMax;
+/*
+ * x = global BLAS root node
+ * y = BLAS node count
+ * z = first triangle
+ * w = triangle count
+ */
+    ivec4 metadata;
+};
 struct PackedTransform {
     mat4 objectToWorld;
     mat4 worldToObject;
@@ -64,8 +92,8 @@ layout(std430, binding = 1) readonly buffer MaterialBuffer {
 layout(std430, binding = 2) readonly buffer SphereBuffer {
     PackedSphere sphereBuffer[];
 };
-layout(std430, binding = 3) readonly buffer BvhNodeBuffer {
-    PackedBvhNode bvhNodeBuffer[];
+layout(std430, binding = 3) readonly buffer TlasNodeBuffer {
+    PackedBvhNode tlasNodeBuffer[];
 };
 layout(std430, binding = 4) readonly buffer QuadBuffer {
     PackedQuad quadBuffer[];
@@ -79,6 +107,18 @@ layout(std430, binding = 6) readonly buffer PrimitiveRefBuffer {
 };
 layout(std430, binding = 7) readonly buffer TransformBuffer {
     PackedTransform transformBuffer[];
+};
+layout(std430, binding = 8) readonly buffer MeshVertexBuffer {
+    PackedMeshVertex meshVertexBuffer[];
+};
+layout(std430, binding = 9) readonly buffer MeshTriangleBuffer {
+    PackedMeshTriangle meshTriangleBuffer[];
+};
+layout(std430, binding = 10) readonly buffer MeshBuffer {
+    PackedMesh meshBuffer[];
+};
+layout(std430, binding = 11) readonly buffer BlasNodeBuffer {
+    PackedBvhNode blasNodeBuffer[];
 };
 
 uniform int uTlasNodeCount;
@@ -109,11 +149,9 @@ struct Ray {
 vec3 transformPoint(mat4 transform, vec3 point) {
     return (transform * vec4(point, 1.0)).xyz;
 }
-
 vec3 transformVector(mat4 transform, vec3 vector) {
     return (transform * vec4(vector, 0.0)).xyz;
 }
-
 Ray transformRay(mat4 transform, Ray ray) {
     Ray transformed;
     transformed.origin = transformPoint(transform, ray.origin);
@@ -121,11 +159,6 @@ Ray transformRay(mat4 transform, Ray ray) {
     return transformed;
 }
 
-struct Sphere {
-    vec3 center;
-    float radius;
-    int material;
-};
 Material loadMaterial(int index) {
     PackedMaterial packed = materialBuffer[index];
     Material material;
@@ -459,11 +492,11 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
     HitRecord temporaryRecord;
     float rootEntryT;
     vec3 inverseDirection = 1.0 / ray.direction;
-    if (!hitAabb(bvhNodeBuffer[0], ray, inverseDirection, rayT.min, closestSoFar, rootEntryT)) {
+    if (!hitAabb(tlasNodeBuffer[0], ray, inverseDirection, rayT.min, closestSoFar, rootEntryT)) {
         return false;
     }
 
-    int stack[BVH_STACK_SIZE];
+    int stack[TLAS_STACK_SIZE];
     int stackSize = 0;
     stack[stackSize++] = 0;
 
@@ -471,7 +504,7 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
         int nodeIndex =
         stack[--stackSize];
 
-        PackedBvhNode node = bvhNodeBuffer[nodeIndex];
+        PackedBvhNode node = tlasNodeBuffer[nodeIndex];
         bool isLeaf = node.metadata.z != 0;
 
         if (isLeaf) {
@@ -491,8 +524,8 @@ bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
         }
         int leftChild = node.metadata.x;
         int rightChild = node.metadata.y;
-        PackedBvhNode leftNode = bvhNodeBuffer[leftChild];
-        PackedBvhNode rightNode = bvhNodeBuffer[rightChild];
+        PackedBvhNode leftNode = tlasNodeBuffer[leftChild];
+        PackedBvhNode rightNode = tlasNodeBuffer[rightChild];
         float leftEntryT;
         float rightEntryT;
         bool hitLeft = hitAabb(leftNode, ray, inverseDirection, rayT.min, closestSoFar, leftEntryT);
