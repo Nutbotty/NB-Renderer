@@ -256,17 +256,18 @@ namespace {
     }
 }
 
-
-BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
+BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize, std::uint32_t blasLeafSize) {
     BvhBuildResult result;
     const auto& sceneSpheres = scene.GetSpheres();
     const auto& sceneQuads = scene.GetQuads();
     const auto& sceneTris = scene.GetTris();
     const auto& sceneInstances = scene.GetInstances();
+    const auto& sceneMeshes = scene.GetMeshes();
 
     result.Spheres.reserve(sceneSpheres.size());
     result.Quads.reserve(sceneQuads.size());
     result.Tris.reserve(sceneTris.size());
+    result.Meshes.reserve(sceneMeshes.size());
 
     for (const SceneSphere& sphere : sceneSpheres) {
         GpuSphere gpuSphere;
@@ -336,6 +337,48 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t leafSize) {
         gpuTransform.WorldToObject = glm::inverse(instance.objectToWorld);
         result.Transforms.push_back(gpuTransform);
         addReference(instance.primitive, transformIndex, instance.objectToWorld);
+    }
+    for (std::uint32_t meshIndex = 0; meshIndex < sceneMeshes.size(); ++ meshIndex) {
+        const SceneMesh& mesh = sceneMeshes[meshIndex];
+        const std::uint32_t firstVertex = static_cast<std::uint32_t>(result.MeshVertices.size());
+
+        for (const SceneMeshVertex& vertex : mesh.vertices) {
+            GpuMeshVertex gpuMeshVertex;
+            gpuMeshVertex.Position = glm::vec4(vertex.position, 0.0f);
+            gpuMeshVertex.Normal = glm::vec4(vertex.normal, 0.0f);
+            result.MeshVertices.push_back(gpuMeshVertex);
+        }
+
+        std::vector<MeshTriangleReference> triangleReferences;
+        triangleReferences.reserve(mesh.triangles.size());
+        for (const SceneMeshTriangle& tri : mesh.triangles) {
+            MeshTriangleReference reference;
+            reference.Triangle.MetaData = glm::ivec4(
+                static_cast<int>(firstVertex + tri.index0),
+                static_cast<int>(firstVertex + tri.index0),
+                static_cast<int>(firstVertex + tri.index0),
+                static_cast<int>(tri.material));
+            reference.BoundingBox = GetMeshTriangeBounds(mesh, tri);
+            reference.Centroid = GetMeshTriangleCentroid(mesh, tri);
+            triangleReferences.push_back(reference);
+        }
+
+        const std::uint32_t firstTriangle = static_cast<std::uint32_t>(result.MeshTriangles.size());
+        const std::uint32_t firstNode = static_cast<std::uint32_t>(result.BlasNodes.size());
+        const std::uint32_t rootNode = BuildMeshBvhNode(triangleReferences, result.BlasNodes, 0,
+                                                        static_cast<std::uint32_t>(triangleReferences.size()),
+                                                        std::max(blasLeafSize, std::uint32_t{1}), firstTriangle);
+        for (const MeshTriangleReference& reference : triangleReferences) {
+            result.MeshTriangles.push_back(reference.Triangle);
+        }
+        const std::uint32_t nodeCount = static_cast<std::uint32_t>(result.BlasNodes.size()) - firstNode;
+
+        GpuMesh gpuMesh;
+        gpuMesh.BoundsMin = glm::vec4(mesh.boundsMin, 0.0f);
+        gpuMesh.BoundsMax = glm::vec4(mesh.boundsMax, 0.0f);
+        gpuMesh.Metadata =  glm::ivec4(static_cast<int>(rootNode), static_cast<int>(nodeCount),
+            static_cast<int>(firstTriangle), static_cast<int>(triangleReferences.size()));
+        result.Meshes.push_back(gpuMesh);
     }
 
     if (references.empty()) {
