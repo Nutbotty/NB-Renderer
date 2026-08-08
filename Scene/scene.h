@@ -122,6 +122,12 @@ class Scene {
 public:
     Scene() = default;
 
+    TextureId addTexture(SceneTexture texture) {
+        const TextureId id = static_cast<TextureId>(m_Textures.size());
+        m_Textures.push_back(std::move(texture));
+        MarkDirty();
+        return id;
+    }
     MaterialId addMaterial(MaterialType type, const glm::vec3& albedo = glm::vec3(1.0f), float fuzz = 0.0f,float indexOfRefraction = 1.0f, const glm::vec3& emission = glm::vec3(0.0f),
     float emissionStrength = 0.0f){
         SceneMaterial material;
@@ -213,6 +219,9 @@ public:
         MarkDirty();
     }
 
+    [[nodiscard]] const std::vector<SceneTexture>& GetTextures() const {
+        return m_Textures;
+    }
     [[nodiscard]] const std::vector<SceneMaterial>& GetMaterials() const {
         return m_Materials;
     }
@@ -242,11 +251,12 @@ public:
         return m_Camera;
     }
 
-    void Clear(){
+    void Clear() {
+        m_Textures.clear();
+        m_Materials.clear();
         m_Spheres.clear();
         m_Quads.clear();
         m_Tris.clear();
-        m_Materials.clear();
         m_instances.clear();
         m_Meshes.clear();
         m_MeshInstances.clear();
@@ -270,6 +280,7 @@ private:
     std::vector<SceneMesh> m_Meshes;
     std::vector<SceneMeshInstance> m_MeshInstances;
 
+    std::vector<SceneTexture> m_Textures;
     SceneEnvironment m_Environment;
     SceneCamera m_Camera;
 
