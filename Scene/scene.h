@@ -7,6 +7,8 @@
 
 #include <vector>
 #include <cstdint>
+#include <string>
+
 #include "../external/glm/glm/glm.hpp"
 
 using MaterialId = std::uint32_t;
@@ -16,12 +18,29 @@ using TriId = std::uint32_t;
 using InstanceId = std::uint32_t;
 using MeshId = std::uint32_t;
 using MeshInstanceId = std::uint32_t;
+using TextureId = std::uint32_t;
 
-//materials
+
+enum class SceneTextureType {
+    Image2D,
+    HDR
+};
 enum class MaterialType : std::uint32_t {
     Lambertian = 0,
     Metal = 1,
     Dielectric = 2
+};
+struct SceneTexture {
+    SceneTextureType type;
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    std::vector<float> hdrPixels;
+};
+struct SceneEnvironment {
+    std::string hdrPath;
+    float intensity = 1.0f;
+    glm::vec3 rotation{0.0f, 0.0f, 0.0f};
 };
 struct SceneMaterial {
     MaterialType type = MaterialType::Lambertian;
@@ -88,8 +107,6 @@ struct SceneMeshInstance {
     MeshId mesh = 0;
     glm::mat4 objectToWorld{1.0f};
 };
-
-
 
 //camera
 struct SceneCamera {
