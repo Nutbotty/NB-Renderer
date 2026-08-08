@@ -15,6 +15,7 @@
 
 #include "OpenGLRenderer/editorcamera.h"
 #include "Scene/scene.h"
+#include "Scene/ModelLoader.h"
 #include "CPURenderer/CPURenderer.h"
 #include "OpenGLRenderer/OpenGLRenderer.h"
 #include "external/fastgltf/include/fastgltf/core.hpp"
@@ -79,6 +80,18 @@ BuildCpuMaterials(const Scene& scene)
 
     return cpuMaterials;
 }
+
+glm::vec3 TransformPoint(
+    const glm::mat4& transform,
+    const glm::vec3& point
+)
+{
+    return glm::vec3(
+        transform
+        * glm::vec4(point, 1.0f)
+    );
+}
+
 hittable_list BuildCpuWorld(const Scene& scene)
 {
     hittable_list world;
@@ -196,30 +209,156 @@ void cornell(hittable_list& world, Scene& scene)  {
     glm::mat4 transform{1.0f};
 
     transform = glm::translate(transform,glm::vec3(5.0f, 0.0f, 0.0f));
-    transform = glm::rotate(transform,glm::radians(30.0f),glm::vec3(0.0f, 1.0f, 0.0f));
+    transform = glm::rotate(transform,glm::radians(40.0f),glm::vec3(0.0f, 1.0f, 0.0f));
+    transform = glm::scale(transform, glm::vec3(4.2, 5.3, 10.6));
     scene.addInstance(ScenePrimitiveRecord{ScenePrimitiveType::Quad,myQuad},transform);
     glm::mat4 testTransform{1.0f};
 
-    testTransform = glm::translate(
-        testTransform,
-        glm::vec3(-150.0f, 100.0f, 0.0f)
-    );
-
-    testTransform = glm::rotate(
-        testTransform,
-        glm::radians(35.0f),
-        glm::vec3(0.0f, 1.0f, 0.0f)
-    );
-
-    scene.addInstance(
-        {
-            ScenePrimitiveType::Quad,
-            myQuad
-        },
-        testTransform
-    );
+    testTransform = glm::translate(testTransform,glm::vec3(-150.0f, 100.0f, 0.0f));
+    testTransform = glm::rotate(testTransform,glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    scene.addInstance({ScenePrimitiveType::Quad,myQuad},testTransform);
 
 
+    glm::mat4 modelTransform{1.0f};
+    modelTransform = glm::translate(modelTransform,glm::vec3(278.0f,100.0f,250.0f));
+    modelTransform = glm::scale(modelTransform,glm::vec3(1000.0f));
+    modelTransform = glm::rotate(modelTransform,glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    if (!GltfLoader::Load("Assets/ABeautifulGame.glb",scene,modelTransform)) {
+        std::cerr << "Model loading failed\n";
+    }
+    std::cerr
+    << "Scene mesh count: "
+    << scene.GetMeshes().size()
+    << '\n'
+    << "Scene mesh instance count: "
+    << scene.GetMeshInstances().size()
+    << '\n';
+
+    for (
+        std::size_t meshIndex = 0;
+        meshIndex < scene.GetMeshes().size();
+        ++meshIndex
+    )
+    {
+        const SceneMesh& mesh =
+            scene.GetMeshes()[meshIndex];
+
+        std::cerr
+            << "Mesh "
+            << meshIndex
+            << ":\n"
+            << "  vertices: "
+            << mesh.vertices.size()
+            << '\n'
+            << "  triangles: "
+            << mesh.triangles.size()
+            << '\n'
+            << "  bounds min: "
+            << mesh.boundsMin.x << ", "
+            << mesh.boundsMin.y << ", "
+            << mesh.boundsMin.z << '\n'
+            << "  bounds max: "
+            << mesh.boundsMax.x << ", "
+            << mesh.boundsMax.y << ", "
+            << mesh.boundsMax.z << '\n';
+    }
+    for (
+    std::size_t instanceIndex = 0;
+    instanceIndex < scene.GetMeshInstances().size();
+    ++instanceIndex
+)
+    {
+        const SceneMeshInstance& instance =
+            scene.GetMeshInstances()[instanceIndex];
+
+        std::cerr
+            << "Mesh instance "
+            << instanceIndex
+            << " references mesh "
+            << instance.mesh
+            << '\n';
+    }
+
+    SceneCamera sceneCamera;
+    sceneCamera.lookFrom = glm::vec3(278, 278, -800);
+    sceneCamera.lookAt = glm::vec3(278, 278, 0);
+    sceneCamera.up = glm::vec3(0, 1, 0);
+    sceneCamera.verticalFovDegrees = 40.0f;
+    sceneCamera.defocusAngleDegrees = 0.0f;
+    sceneCamera.focusDistance = 10.0f;
+    scene.SetCamera(sceneCamera);
+    viewport(scene);
+    // Renderer(scene);
+}
+void dragon(hittable_list& world, Scene& scene)  {
+    scene.Clear();
+    const MaterialId light = scene.addMaterial(MaterialType::Lambertian,glm::vec3(1.0f, 1.0f, 1.0f),0, 1.0, glm::vec3(1.0f, 1.0f, 1.0f), 60.0f);
+    const MaterialId white = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.73f, 0.73f, 0.73f),0, 1.0, glm::vec3(0.73f, 0.73f, 0.73f), 0.0f);
+    scene.addQuad(glm::vec3(343, 554, 332), glm::vec3(-130, 0, 0), glm::vec3(0, 0, -105), light);
+    scene.addQuad(glm::vec3(0, 0, 0), glm::vec3(555, 0, 0), glm::vec3(0, 0, 555), white);
+    scene.addQuad(glm::vec3(555, 555, 555), glm::vec3(-555, 0, 0), glm::vec3(0, 0, -555), white);
+    scene.addQuad(glm::vec3(0, 0, 555), glm::vec3(555, 0, 0), glm::vec3(0, 555, 0), white);
+
+
+    glm::mat4 modelTransform{1.0f};
+    modelTransform = glm::translate(modelTransform,glm::vec3(278.0f,100.0f,250.0f));
+    modelTransform = glm::scale(modelTransform,glm::vec3(100.0f));
+    modelTransform = glm::rotate(modelTransform,glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    if (!GltfLoader::Load("Assets/DragonAttenuation.glb",scene,modelTransform)) {
+        std::cerr << "Model loading failed\n";
+    }
+    std::cerr
+    << "Scene mesh count: "
+    << scene.GetMeshes().size()
+    << '\n'
+    << "Scene mesh instance count: "
+    << scene.GetMeshInstances().size()
+    << '\n';
+
+    for (
+        std::size_t meshIndex = 0;
+        meshIndex < scene.GetMeshes().size();
+        ++meshIndex
+    )
+    {
+        const SceneMesh& mesh =
+            scene.GetMeshes()[meshIndex];
+
+        std::cerr
+            << "Mesh "
+            << meshIndex
+            << ":\n"
+            << "  vertices: "
+            << mesh.vertices.size()
+            << '\n'
+            << "  triangles: "
+            << mesh.triangles.size()
+            << '\n'
+            << "  bounds min: "
+            << mesh.boundsMin.x << ", "
+            << mesh.boundsMin.y << ", "
+            << mesh.boundsMin.z << '\n'
+            << "  bounds max: "
+            << mesh.boundsMax.x << ", "
+            << mesh.boundsMax.y << ", "
+            << mesh.boundsMax.z << '\n';
+    }
+    for (
+    std::size_t instanceIndex = 0;
+    instanceIndex < scene.GetMeshInstances().size();
+    ++instanceIndex
+)
+    {
+        const SceneMeshInstance& instance =
+            scene.GetMeshInstances()[instanceIndex];
+
+        std::cerr
+            << "Mesh instance "
+            << instanceIndex
+            << " references mesh "
+            << instance.mesh
+            << '\n';
+    }
 
     SceneCamera sceneCamera;
     sceneCamera.lookFrom = glm::vec3(278, 278, -800);
@@ -542,12 +681,13 @@ int main() {
     // WORLD
     hittable_list world;
     Scene scene;
-    switch (6) {
+    switch (7) {
         case 1: bouncing_spheres(world, scene); break;
         // case 2: checkered_spheres(world, scene); break;
         // case 3: earth(world, scene); break;
         // case 4: perlin_spheres(world, scene); break;
         case 5: quads(world, scene); break;
         case 6: cornell(world, scene); break;
+        case 7: dragon(world, scene); break;
     }
 }
