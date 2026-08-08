@@ -60,7 +60,7 @@ int Renderer(const Scene &scene) {
     const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
     const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,8);
     const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
-    const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.Nodes;
+    const std::vector<GpuBvhNode> &gpuBvhNodes = gpuBvh.TlasNodes;
 
     Window window(RenderWidth, RenderHeight, "Viewport");
 
