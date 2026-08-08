@@ -13,8 +13,8 @@
 
 namespace {
 // settings
-    const unsigned int SCR_WIDTH = 2560;
-    const unsigned int SCR_HEIGHT = 1440;
+    const unsigned int SCR_WIDTH = 1920;
+    const unsigned int SCR_HEIGHT = 1080;
     bool TRACE = true;
     constexpr float EPSILON = 1e-8f;
 
