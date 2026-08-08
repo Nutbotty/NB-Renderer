@@ -343,6 +343,16 @@ Sphere loadSphere(int index) {
     return sphere;
 }
 //todo fix hitsphere to use buffer
+bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, float rayTMax, out float entryT) {
+    vec3 t0 = (node.boundsMin.xyz - ray.origin) * inverseDirection;
+    vec3 t1 = (node.boundsMax.xyz - ray.origin) * inverseDirection;
+    vec3 nearT = min(t0, t1);
+    vec3 farT = max(t0, t1);
+    float currentMin = max(rayTMin, max(nearT.x, max(nearT.y, nearT.z)));
+    float currentMax = min(rayTMax, min(farT.x, min(farT.y, farT.z)));
+    entryT = currentMin;
+    return currentMax >= currentMin;
+}
 bool hitSphere(Sphere sphere, Ray r, Interval rT, out HitRecord record) {
     vec3 oc = r.origin - sphere.center;
     float a = dot(r.direction, r.direction);
@@ -438,6 +448,63 @@ bool hitTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
     setFaceNormal(r, normal, record);
     return true;
 }
+
+bool hitMeshTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
+    PackedMeshTriangle tri = meshTriangleBuffer[triIndex];
+    int index0 = tri.metadata.x;
+    int index1 = tri.metadata.y;
+    int index2 = tri.metadata.z;
+
+    vec3 a = meshVertexBuffer[index0].position.xyz;
+    vec3 b = meshVertexBuffer[index1].position.xyz;
+    vec3 c = meshVertexBuffer[index2].position.xyz;
+
+    vec3 edge1 = b - a;
+    vec3 edge2 = c - a;
+    vec3 p = cross(r.direction, edge2);
+    float determinant = dot(edge1, p);
+    if (abs(determinant) < EPSILON) {
+        return false;
+    }
+
+    float inverseDeterminant =  1.0 / determinant;
+
+    vec3 s = r.origin - a;
+    float u = inverseDeterminant * dot(s, p);
+    if (u < 0.0 || u > 1.0) {
+        return false;
+    }
+
+    vec3 q = cross(s, edge1);
+    float v = inverseDeterminant * dot(r.direction, q);
+    if (v < 0.0 || u + v > 1.0) {
+        return false;
+    }
+    float t = inverseDeterminant * dot(edge2, q);
+    if (!intervalSurrounds(rT, t)) {
+        return false;
+    }
+    record.t = t;
+    record.p = rayAt(r, t);
+    record.material = triangle.metadata.w;
+
+    float w = 1.0 - u - v;
+    vec3 n0 = meshVertexBuffer[index0].normal.xyz;
+    vec3 n1 = meshVertexBuffer[index1].normal.xyz;
+    vec3 n2 = meshVertexBuffer[index2].normal.xyz;
+    vec3 interpolatedNormal = w * n0 + u * n1 + v * n2;
+    vec3 outwardNormal;
+
+    if (dot(interpolatedNormal, interpolatedNormal) > EPSILON) {
+        outwardNormal = normalize(interpolatedNormal);
+    }
+    else {
+        outwardNormal = normalize(cross(edge1, edge2));
+    }
+    setFaceNormal(r, outwardNormal, record);
+    return true;
+}
+
 bool hitLocalPrimitive(int primitiveType, int primitiveIndex, Ray r, Interval rT, out HitRecord record) {
     if (primitiveType == PRIMITIVE_SPHERE) {
         return false;
@@ -472,16 +539,6 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     vec3 worldOutwardNormal = normalize(normalToWorld * localOutwardNormal);
     setFaceNormal(r, worldOutwardNormal, record);
     return true;
-}
-bool hitAabb(PackedBvhNode node, Ray ray, vec3 inverseDirection, float rayTMin, float rayTMax, out float entryT) {
-    vec3 t0 = (node.boundsMin.xyz - ray.origin) * inverseDirection;
-    vec3 t1 = (node.boundsMax.xyz - ray.origin) * inverseDirection;
-    vec3 nearT = min(t0, t1);
-    vec3 farT = max(t0, t1);
-    float currentMin = max(rayTMin, max(nearT.x, max(nearT.y, nearT.z)));
-    float currentMax = min(rayTMax, min(farT.x, min(farT.y, farT.z)));
-    entryT = currentMin;
-    return currentMax >= currentMin;
 }
 bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
     if (uBvhNodeCount <= 0) {
