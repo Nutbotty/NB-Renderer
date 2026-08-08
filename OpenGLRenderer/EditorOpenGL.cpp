@@ -13,8 +13,10 @@
 
 namespace {
 // settings
-    const unsigned int SCR_WIDTH = 1920;
-    const unsigned int SCR_HEIGHT = 1080;
+    const unsigned int SCR_WIDTH = 2560;
+    const unsigned int SCR_HEIGHT = 1440;
+    const unsigned int RENDER_WIDTH = 1280;
+    const unsigned int RENDER_HEIGHT = 720;
     bool TRACE = true;
     constexpr float EPSILON = 1e-8f;
 
@@ -33,8 +35,8 @@ namespace {
     constexpr std::uint32_t BlasLeafSize = 4;
     constexpr unsigned int ComputeLocalSizeX = 16;
     constexpr unsigned int ComputeLocalSizeY = 16;
-    const GLuint groupCountX = (SCR_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
-    const GLuint groupCountY = (SCR_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
+    const GLuint groupCountX = (RENDER_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
+    const GLuint groupCountY = (RENDER_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
 
 
 
@@ -238,7 +240,7 @@ void viewport(const Scene& scene) {
     glGenVertexArrays(1, &fullscreenVAO);
 
 
-    glTexStorage2D(GL_TEXTURE_2D, 1,GL_RGBA32F, SCR_WIDTH, SCR_HEIGHT);
+    glTexStorage2D(GL_TEXTURE_2D, 1,GL_RGBA32F, RENDER_WIDTH, RENDER_HEIGHT);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
