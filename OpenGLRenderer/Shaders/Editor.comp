@@ -14,7 +14,7 @@ const float EPSILON = 1e-8;
 const float MAX_RAY_DISTANCE = 1e30;
 const int SAMPLES_PER_PIXEL = 5;
 const int SAMPLES_PER_DISPATCH = 1;
-const int MAX_DEPTH = 8;
+const int MAX_DEPTH = 2;
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform image2D outputImage;
@@ -486,7 +486,7 @@ bool hitMeshTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
     }
     record.t = t;
     record.p = rayAt(r, t);
-    record.material = triangle.metadata.w;
+    record.material = tri.metadata.w;
 
     float w = 1.0 - u - v;
     vec3 n0 = meshVertexBuffer[index0].normal.xyz;
@@ -504,6 +504,67 @@ bool hitMeshTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
     setFaceNormal(r, outwardNormal, record);
     return true;
 }
+bool hitMesh(int meshIndex, Ray localRay, Interval rT, out HitRecord record) {
+    PackedMesh mesh = meshBuffer[meshIndex];
+    int rootNode = mesh.metadata.x;
+    bool hitAnything = false;
+    float closestSoFar = rT.max;
+
+    HitRecord temporaryRecord;
+    vec3 inverseDirection = 1.0 / localRay.direction;
+    float rootEntryT;
+    if (!hitAabb(blasNodeBuffer[rootNode], localRay, inverseDirection, rT.min, closestSoFar, rootEntryT)) {
+        return false;
+    }
+
+    int stack[BLAS_STACK_SIZE];
+    int stackSize = 0;
+    stack[stackSize++] = rootNode;
+
+    while (stackSize > 0) {
+        int nodeIndex = stack[--stackSize];
+        PackedBvhNode node = blasNodeBuffer[nodeIndex];
+        bool isLeaf = node.metadata.z != 0;
+        if (isLeaf) {
+            int firstTriangle = node.metadata.x;
+            int triangleCount = node.metadata.y;
+            for (int triangleOffset = 0; triangleOffset < triangleCount; ++triangleOffset) {
+                int triangleIndex = firstTriangle + triangleOffset;
+                if (hitMeshTri(triangleIndex, localRay, Interval(rT.min, closestSoFar), temporaryRecord)) {
+                    hitAnything = true;
+                    closestSoFar = temporaryRecord.t;
+                    record = temporaryRecord;
+                }
+            }
+            continue;
+        }
+
+        int leftChild = node.metadata.x;
+        int rightChild = node.metadata.y;
+        float leftEntryT;
+        float rightEntryT;
+        bool hitLeft = hitAabb(blasNodeBuffer[leftChild], localRay, inverseDirection, rT.min, closestSoFar, leftEntryT);
+        bool hitRight = hitAabb(blasNodeBuffer[rightChild], localRay, inverseDirection, rT.min, closestSoFar, rightEntryT);
+        if (hitLeft && hitRight) {
+            /*
+             * Push farther child first so the nearer
+             * child is popped first.
+             */
+            if (leftEntryT < rightEntryT) {
+                stack[stackSize++] = rightChild;
+                stack[stackSize++] = leftChild;
+            } else {
+                stack[stackSize++] = leftChild;
+                stack[stackSize++] = rightChild;
+            }
+        } else if (hitLeft){
+            stack[stackSize++] = leftChild;
+        } else if (hitRight) {
+            stack[stackSize++] = rightChild;
+        }
+    }
+    return hitAnything;
+}
 
 bool hitLocalPrimitive(int primitiveType, int primitiveIndex, Ray r, Interval rT, out HitRecord record) {
     if (primitiveType == PRIMITIVE_SPHERE) {
@@ -512,6 +573,8 @@ bool hitLocalPrimitive(int primitiveType, int primitiveIndex, Ray r, Interval rT
         return hitQuad(primitiveIndex, r, rT, record);
     } else if (primitiveType == PRIMITIVE_TRI) {
         return hitTri(primitiveIndex, r, rT, record);
+    } else if (primitiveType == PRIMITIVE_MESH) {
+        return hitMesh(primitiveIndex, r, rT, record);
     }
     return false;
 }
@@ -541,7 +604,7 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     return true;
 }
 bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {
-    if (uBvhNodeCount <= 0) {
+    if (uTlasNodeCount <= 0) {
         return false;
     }
     bool hitAnything = false;
