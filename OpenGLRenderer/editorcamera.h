@@ -29,7 +29,7 @@ public:
     float DefocusAngle = 0.0f;
     float FocusDistance = 1.0f;
 
-    float MovementSpeed = 10.0f;
+    float MovementSpeed = 150.0f;
     float MouseSensitivity = 0.1f;
 
 
