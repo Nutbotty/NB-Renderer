@@ -7,8 +7,8 @@ const int PRIMITIVE_SPHERE   = 0;
 const int PRIMITIVE_QUAD     = 1;
 const int PRIMITIVE_TRI = 2;
 const int PRIMITIVE_MESH = 3;
-const int TLAS_STACK_SIZE = 32;
-const int BLAS_STACK_SIZE = 64;
+const int TLAS_STACK_SIZE = 16;
+const int BLAS_STACK_SIZE = 32;
 
 const float EPSILON = 1e-8;
 const float MAX_RAY_DISTANCE = 1e30;
