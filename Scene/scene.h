@@ -38,7 +38,7 @@ struct SceneTexture {
     std::vector<float> hdrPixels;
 };
 struct SceneEnvironment {
-    std::string hdrPath;
+    TextureId texture;
     float intensity = 1.0f;
     glm::vec3 rotation{0.0f, 0.0f, 0.0f};
 };
@@ -208,6 +208,10 @@ public:
         m_Camera = camera;
         MarkDirty();
     }
+    void SetEnvironment(const SceneEnvironment& environment) {
+        m_Environment = environment;
+        MarkDirty();
+    }
 
     [[nodiscard]] const std::vector<SceneMaterial>& GetMaterials() const {
         return m_Materials;
@@ -230,6 +234,9 @@ public:
     [[nodiscard]]
     const std::vector<SceneMeshInstance>& GetMeshInstances() const {
         return m_MeshInstances;
+    }
+    [[nodiscard]]const SceneEnvironment& GetEnvironment() const {
+        return m_Environment;
     }
     [[nodiscard]] const SceneCamera& GetCamera() const {
         return m_Camera;
@@ -260,10 +267,10 @@ private:
     std::vector<SceneQuad> m_Quads;
     std::vector<SceneTri> m_Tris;
     std::vector<SceneInstance> m_instances;
-
     std::vector<SceneMesh> m_Meshes;
     std::vector<SceneMeshInstance> m_MeshInstances;
 
+    SceneEnvironment m_Environment;
     SceneCamera m_Camera;
 
     bool m_Dirty = true;
