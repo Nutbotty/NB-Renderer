@@ -80,6 +80,26 @@ BuildCpuMaterials(const Scene& scene)
 
     return cpuMaterials;
 }
+GLuint LoadHdrTexture(const std::filesystem::path& path) {
+    int width = 0;
+    int height = 0;
+    int channels = 0;
+    float* pixels = stbi_loadf(path.string().c_str(), &width, &height, &channels, 3);
+    if (!pixels) {
+        throw std::runtime_error("Failed to load HDR environment");
+    }
+    GLuint texture = 0;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, pixels);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    stbi_image_free(pixels);
+    return texture;
+}
 
 glm::vec3 TransformPoint(
     const glm::mat4& transform,
@@ -298,6 +318,9 @@ void dragon(hittable_list& world, Scene& scene)  {
     if (!GltfLoader::Load("Assets/DragonDispersion.glb",scene,modelTransform)) {
         std::cerr << "Model loading failed\n";
     }
+    // if (!GltfLoader::Load("Assets/Sponza/glTF/Sponza.gltf",scene,modelTransform)) {
+    //     std::cerr << "Model loading failed\n";
+    // }
     std::cerr
     << "Scene mesh count: "
     << scene.GetMeshes().size()
@@ -362,7 +385,26 @@ void dragon(hittable_list& world, Scene& scene)  {
     viewport(scene);
     // Renderer(scene);
 }
-
+void sponza(hittable_list& world, Scene& scene)  {
+    scene.Clear();
+    glm::mat4 modelTransform{1.0f};
+    modelTransform = glm::translate(modelTransform,glm::vec3(278.0f,100.0f,250.0f));
+    modelTransform = glm::scale(modelTransform,glm::vec3(100.0f));
+    modelTransform = glm::rotate(modelTransform,glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    if (!GltfLoader::Load("Assets/Sponza/glTF/Sponza.gltf",scene,modelTransform)) {
+        std::cerr << "Model loading failed\n";
+    }
+    SceneCamera sceneCamera;
+    sceneCamera.lookFrom = glm::vec3(278, 278, -800);
+    sceneCamera.lookAt = glm::vec3(278, 278, 0);
+    sceneCamera.up = glm::vec3(0, 1, 0);
+    sceneCamera.verticalFovDegrees = 40.0f;
+    sceneCamera.defocusAngleDegrees = 0.0f;
+    sceneCamera.focusDistance = 10.0f;
+    scene.SetCamera(sceneCamera);
+    viewport(scene);
+    // Renderer(scene);
+}
 void bouncing_spheres(hittable_list& world, Scene& scene) {
     scene.Clear();
     const MaterialId groundMaterial = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.5f, 0.5f, 0.5f));
@@ -680,5 +722,6 @@ int main() {
         case 5: quads(world, scene); break;
         case 6: cornell(world, scene); break;
         case 7: dragon(world, scene); break;
+        case 8: sponza(world, scene); break;
     }
 }
