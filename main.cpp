@@ -144,15 +144,26 @@ void quads(hittable_list& world, Scene& scene) {
     const MaterialId mat2 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.2f, 0.2f, 1.0f));
     const MaterialId mat3 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(1.0f, 0.5f, 0.0f));
     const MaterialId mat4 = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.2f, 0.8f, 0.8f));
-    scene.addQuad(glm::vec3(-3, -2, 5), glm::vec3(0, 0, -4), glm::vec3(0, 4, 0), groundMaterial);
+    auto myQuad = scene.addQuad(glm::vec3(-3, -2, 5), glm::vec3(0, 0, -4), glm::vec3(0, 4, 0), groundMaterial);
     scene.addTri(glm::vec3(-2, -2, 0), glm::vec3(4, 0, 0), glm::vec3(0, 4, 0), mat1);
     scene.addTri(glm::vec3(2, 2, 0), glm::vec3(-4, 0, 0), glm::vec3(0, -4, 0), mat2);
     scene.addQuad(glm::vec3(3, 3, 1), glm::vec3(0, 0, 4), glm::vec3(0, 4, 0), mat2);
     scene.addQuad(glm::vec3(-2, 3, 1), glm::vec3(4, 0, 0), glm::vec3(0, 0, 4), mat3);
     scene.addQuad(glm::vec3(-2, -3, 5), glm::vec3(4, 0, 0), glm::vec3(0, 0, -4), mat4);
-    world = BuildCpuWorld(scene);
-    auto bvhRoot = std::make_shared<bvh_node>(world);
-    world = hittable_list(bvhRoot);
+    glm::mat4 transform{1.0f};
+
+    transform = glm::translate(transform,glm::vec3(5.0f, 0.0f, 0.0f));
+    transform = glm::rotate(transform,glm::radians(40.0f),glm::vec3(0.0f, 1.0f, 0.0f));
+    transform = glm::scale(transform, glm::vec3(4.2, 5.3, 10.6));
+    scene.addInstance(ScenePrimitiveRecord{ScenePrimitiveType::Quad,myQuad},transform);
+    glm::mat4 testTransform{1.0f};
+
+    testTransform = glm::translate(testTransform,glm::vec3(-150.0f, 100.0f, 0.0f));
+    testTransform = glm::rotate(testTransform,glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    scene.addInstance({ScenePrimitiveType::Quad,myQuad},testTransform);
+    // world = BuildCpuWorld(scene);
+    // auto bvhRoot = std::make_shared<bvh_node>(world);
+    // world = hittable_list(bvhRoot);
 
     SceneCamera sceneCamera;
     sceneCamera.lookFrom = glm::vec3(0, 0, 9);
@@ -188,7 +199,7 @@ void cornell(hittable_list& world, Scene& scene)  {
     const MaterialId red = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.65f, 0.05f, 0.05f),0, 1.0, glm::vec3(0.65f, 0.05f, 0.05f), 0.0f);
     const MaterialId white = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.73f, 0.73f, 0.73f),0, 1.0, glm::vec3(0.73f, 0.73f, 0.73f), 0.0f);
     scene.addQuad(glm::vec3(555, 0, 0), glm::vec3(0, 555, 0), glm::vec3(0, 0, 555), green);
-    QuadId myQuad = scene.addQuad(glm::vec3(0, 0, 0), glm::vec3(0, 555, 0), glm::vec3(0, 0, 555), red);
+    scene.addQuad(glm::vec3(0, 0, 0), glm::vec3(0, 555, 0), glm::vec3(0, 0, 555), red);
     scene.addQuad(glm::vec3(343, 554, 332), glm::vec3(-130, 0, 0), glm::vec3(0, 0, -105), light);
     scene.addQuad(glm::vec3(0, 0, 0), glm::vec3(555, 0, 0), glm::vec3(0, 0, 555), white);
     scene.addQuad(glm::vec3(555, 555, 555), glm::vec3(-555, 0, 0), glm::vec3(0, 0, -555), white);
@@ -206,18 +217,6 @@ void cornell(hittable_list& world, Scene& scene)  {
     scene.addQuad(glm::vec3(265,0,295), glm::vec3(165,0,0), glm::vec3(0,0,165), white);
     scene.addQuad(glm::vec3(265,0,460), glm::vec3(165,0,0), glm::vec3(0,330,0), white);
     scene.addQuad(glm::vec3(430,0,295), glm::vec3(-165,0,0), glm::vec3(0,330,0), white);
-    glm::mat4 transform{1.0f};
-
-    transform = glm::translate(transform,glm::vec3(5.0f, 0.0f, 0.0f));
-    transform = glm::rotate(transform,glm::radians(40.0f),glm::vec3(0.0f, 1.0f, 0.0f));
-    transform = glm::scale(transform, glm::vec3(4.2, 5.3, 10.6));
-    scene.addInstance(ScenePrimitiveRecord{ScenePrimitiveType::Quad,myQuad},transform);
-    glm::mat4 testTransform{1.0f};
-
-    testTransform = glm::translate(testTransform,glm::vec3(-150.0f, 100.0f, 0.0f));
-    testTransform = glm::rotate(testTransform,glm::radians(35.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    scene.addInstance({ScenePrimitiveType::Quad,myQuad},testTransform);
-
 
     glm::mat4 modelTransform{1.0f};
     modelTransform = glm::translate(modelTransform,glm::vec3(278.0f,100.0f,250.0f));
@@ -292,19 +291,11 @@ void cornell(hittable_list& world, Scene& scene)  {
 }
 void dragon(hittable_list& world, Scene& scene)  {
     scene.Clear();
-    const MaterialId light = scene.addMaterial(MaterialType::Lambertian,glm::vec3(1.0f, 1.0f, 1.0f),0, 1.0, glm::vec3(1.0f, 1.0f, 1.0f), 60.0f);
-    const MaterialId white = scene.addMaterial(MaterialType::Lambertian,glm::vec3(0.73f, 0.73f, 0.73f),0, 1.0, glm::vec3(0.73f, 0.73f, 0.73f), 0.0f);
-    scene.addQuad(glm::vec3(343, 554, 332), glm::vec3(-130, 0, 0), glm::vec3(0, 0, -105), light);
-    scene.addQuad(glm::vec3(0, 0, 0), glm::vec3(555, 0, 0), glm::vec3(0, 0, 555), white);
-    scene.addQuad(glm::vec3(555, 555, 555), glm::vec3(-555, 0, 0), glm::vec3(0, 0, -555), white);
-    scene.addQuad(glm::vec3(0, 0, 555), glm::vec3(555, 0, 0), glm::vec3(0, 555, 0), white);
-
-
     glm::mat4 modelTransform{1.0f};
     modelTransform = glm::translate(modelTransform,glm::vec3(278.0f,100.0f,250.0f));
     modelTransform = glm::scale(modelTransform,glm::vec3(100.0f));
     modelTransform = glm::rotate(modelTransform,glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
-    if (!GltfLoader::Load("Assets/DragonAttenuation.glb",scene,modelTransform)) {
+    if (!GltfLoader::Load("Assets/DragonDispersion.glb",scene,modelTransform)) {
         std::cerr << "Model loading failed\n";
     }
     std::cerr
