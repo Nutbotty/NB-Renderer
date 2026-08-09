@@ -83,13 +83,13 @@ BuildCpuMaterials(const Scene& scene)
 SceneTexture LoadHDR(const std::string& path) {
     int width = 0;
     int height = 0;
-    int channels = 0;
+    int channelsInFile = 0;
 
     float* pixels = stbi_loadf(
         path.c_str(),
         &width,
         &height,
-        &channels,
+        &channelsInFile,
         3
     );
 
@@ -110,7 +110,7 @@ SceneTexture LoadHDR(const std::string& path) {
     const std::size_t pixelCount =
         static_cast<std::size_t>(width) *
         static_cast<std::size_t>(height) *
-        static_cast<std::size_t>(channels);
+        3;
 
     texture.hdrPixels.assign(
         pixels,
@@ -339,12 +339,12 @@ void dragon(hittable_list& world, Scene& scene)  {
     if (!GltfLoader::Load("Assets/DragonDispersion.glb",scene,modelTransform)) {
         std::cerr << "Model loading failed\n";
     }
+    SceneTexture hdrTexture = LoadHDR("Assets/HDRI/field.hdr");
 
-    SceneTexture hdrTexture = LoadHDR("Assets/HDRI/harbour.hdr");
     TextureId hdrTextureId = scene.addTexture(std::move(hdrTexture));
     SceneEnvironment environment;
     environment.texture = hdrTextureId;
-    environment.intensity = 2.0f;
+    environment.intensity = 1.0f;
     environment.rotation = glm::vec3(0.0f);
     scene.SetEnvironment(environment);
 
