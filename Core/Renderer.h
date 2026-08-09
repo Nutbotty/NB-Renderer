@@ -21,6 +21,8 @@ public:
     virtual void Render(const Scene& scene, const EditorCamera& camera) = 0;
     virtual void Resize(std::uint32_t width, std::uint32_t height) = 0;
     virtual void ResetAccumulation();
+
+    [[nodiscard]] virtual RenderBackend GetBackend() const;
 };
 
 #endif //NB_RENDERER_RENDERER_H
