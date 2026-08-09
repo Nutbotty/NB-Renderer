@@ -38,29 +38,26 @@ namespace {
     const GLuint groupCountX = (RENDER_WIDTH + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
     const GLuint groupCountY = (RENDER_HEIGHT + ComputeLocalSizeY - 1)/ ComputeLocalSizeY;
 
+    // timing
+    float deltaTime = 0.0f;
+    float lastFrame = 0.0f;
 
+    std::vector<GpuMaterial> BuildGpuMaterials(const Scene& scene) {
+        std::vector<GpuMaterial> result;
+        result.reserve(scene.GetMaterials().size());
 
-// timing
-float deltaTime = 0.0f;
-float lastFrame = 0.0f;
-
-std::vector<GpuMaterial>
-BuildGpuMaterials(const Scene& scene) {
-    std::vector<GpuMaterial> result;
-    result.reserve(scene.GetMaterials().size());
-
-    for (const SceneMaterial& material :scene.GetMaterials()) {
-        GpuMaterial gpuMaterial;
-        gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
-        gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
-        gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
-        gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
-        result.push_back(gpuMaterial);
+        for (const SceneMaterial& material :scene.GetMaterials()) {
+            GpuMaterial gpuMaterial;
+            gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
+            gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
+            gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
+            gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
+            result.push_back(gpuMaterial);
+        }
+        return result;
     }
-    return result;
-}
 
-GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
+    GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     GLuint buffer = 0;
     glGenBuffers(1,&buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,buffer);
@@ -69,7 +66,44 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,0);
     return buffer;
 }
-struct CameraState {
+
+    GLuint CreateHdrTexture(const SceneTexture& texture) {
+    if (texture.type != SceneTextureType::HDR) {
+        throw std::invalid_argument("CreateHdrTexture requires an HDR SceneTexture");
+    }
+    if (texture.width <= 0 || texture.height <= 0 || texture.hdrPixels.empty()) {
+        throw std::invalid_argument("HDR SceneTexture contains no image data");
+    }
+    GLenum format;
+    GLenum internalFormat;
+    switch (texture.channels) {
+        case 3:
+            format = GL_RGB;
+            internalFormat = GL_RGB16F;
+            break;
+        case 4:
+            format = GL_RGBA;
+            internalFormat = GL_RGBA16F;
+            break;
+        default:
+            throw std::invalid_argument("HDR environment must have 3 or 4 channels");
+    }
+    GLuint glTexture = 0;
+    glGenTextures(1, &glTexture);
+    glBindTexture(GL_TEXTURE_2D, glTexture);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glTexImage2D(GL_TEXTURE_2D,0,internalFormat, texture.width, texture.height,
+        0, format, GL_FLOAT, texture.hdrPixels.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S,GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return glTexture;
+}
+
+    struct CameraState {
     glm::vec3 Position{0.0f};
     glm::vec3 Front{0.0f};
     glm::vec3 Up{0.0f};
@@ -78,7 +112,7 @@ struct CameraState {
     float DefocusAngle = 0.0f;
 };
 
-CameraState CaptureCameraState(const EditorCamera& editorCamera) {
+    CameraState CaptureCameraState(const EditorCamera& editorCamera) {
     CameraState state;
     state.Position = editorCamera.LookFrom;
     state.Front = editorCamera.LookAt;
@@ -111,16 +145,24 @@ CameraState CaptureCameraState(const EditorCamera& editorCamera) {
 void viewport(const Scene& scene) {
     const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene);
     const BvhBuildResult gpuBvh = BvhBuilder::Build(scene,TlasLeafSize, BlasLeafSize);
-
     const std::vector<GpuSphere> &gpuSpheres = gpuBvh.Spheres;
     const std::vector<GpuBvhNode> &gpuTlasNodes = gpuBvh.TlasNodes;
 
     EditorCamera camera(scene.GetCamera());
-
     Window window(SCR_WIDTH, SCR_HEIGHT, "Viewport");
+    if (window.Initialize() != 0) return;
 
-    if (window.Initialize() != 0)
-        return;
+
+    const SceneEnvironment& environment = scene.GetEnvironment();
+    const auto& sceneTextures = scene.GetTextures();
+    if (environment.texture>= sceneTextures.size()) {
+        throw std::out_of_range("Scene environment references invalid TextureId");
+    }
+    const SceneTexture& environmentTextureData = sceneTextures[environment.texture];
+    const GLuint environmentTexture = CreateHdrTexture(environmentTextureData);
+
+
+
 
     Input input(camera);
     input.Initialize(window.GetNativeWindow());
@@ -251,22 +293,21 @@ void viewport(const Scene& scene) {
 
     fullscreenShader.use();
     fullscreenShader.setInt("outputTexture", 0);
-    std::uint32_t accumulationFrame =
-    0;
+
+    computeShader.use();
+    computeShader.setInt("uEnvironmentMap",1);
 
     CameraState previousCameraState = CaptureCameraState(camera);
     bool previousTraceMode = TRACE;
+    std::uint32_t accumulationFrame = 0;
     constexpr std::uint32_t MaxAccumulationFrames = 4096;
 
-    while (!window.ShouldClose())
-    {
+    while (!window.ShouldClose()) {
         // per-frame time logic
         // --------------------
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
-        // input
-        // -----
         input.Update(deltaTime);
 
         const CameraState currentCameraState = CaptureCameraState(camera);
@@ -294,31 +335,23 @@ void viewport(const Scene& scene) {
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshBufferBinding, meshBuffer);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BlasBufferBinding, blasBuffer);
 
-                glBindImageTexture(
-                    0,
-                    outputTexture,
-                    0,
-                    GL_FALSE,
-                    0,
-                    GL_READ_WRITE,
-                    GL_RGBA32F
-                );
+                glActiveTexture(GL_TEXTURE1);
+                glBindTexture(GL_TEXTURE_2D, environmentTexture);
+                glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+
                 computeShader.setUInt("uFrameIndex", accumulationFrame);
                 computeShader.setInt("uTlasNodeCount", static_cast<int>(gpuTlasNodes.size()));
-
                 computeShader.setVec3("uCameraLookFrom",camera.LookFrom);
                 computeShader.setVec3("uCameraLookAt",camera.LookAt);
                 computeShader.setVec3("uCameraVUp",camera.VUp);
                 computeShader.setFloat("uCameraVerticalFov",camera.VerticalFov);
                 computeShader.setFloat("uCameraFocusDistance", camera.FocusDistance);
                 computeShader.setFloat("uCameraDefocusAngle", camera.DefocusAngle);
+                computeShader.setFloat("uEnvironmentIntensity", environment.intensity);
+                computeShader.setVec3("uEnvironmentRotation", glm::radians(environment.rotation));
 
                 glDispatchCompute(groupCountX, groupCountY, 1);
-
-                glMemoryBarrier(
-                    GL_SHADER_IMAGE_ACCESS_BARRIER_BIT |
-                    GL_TEXTURE_FETCH_BARRIER_BIT);
-
+                glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
                 ++accumulationFrame;
             }
             fullscreenShader.use();
@@ -392,6 +425,7 @@ void viewport(const Scene& scene) {
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &fullscreenVAO);
     glDeleteTextures(1, &outputTexture);
+    glDeleteTextures(1, &environmentTexture);
     glDeleteBuffers(1, &materialBuffer);
     glDeleteBuffers(1, &sphereBuffer);
     glDeleteBuffers(1, &tlasBuffer);
