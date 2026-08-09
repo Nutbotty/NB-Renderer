@@ -80,24 +80,45 @@ BuildCpuMaterials(const Scene& scene)
 
     return cpuMaterials;
 }
-GLuint LoadHdrTexture(const std::filesystem::path& path) {
+SceneTexture LoadHDR(const std::string& path) {
     int width = 0;
     int height = 0;
     int channels = 0;
-    float* pixels = stbi_loadf(path.string().c_str(), &width, &height, &channels, 3);
-    if (!pixels) {
-        throw std::runtime_error("Failed to load HDR environment");
+
+    float* pixels = stbi_loadf(
+        path.c_str(),
+        &width,
+        &height,
+        &channels,
+        3
+    );
+
+    if (!pixels)
+    {
+        throw std::runtime_error(
+            "Failed to load HDR image: " + path
+        );
     }
-    GLuint texture = 0;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, width, height, 0, GL_RGB, GL_FLOAT, pixels);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glBindTexture(GL_TEXTURE_2D, 0);
+
+    SceneTexture texture;
+
+    texture.type = SceneTextureType::HDR;
+    texture.width = width;
+    texture.height = height;
+    texture.channels = 3;
+
+    const std::size_t pixelCount =
+        static_cast<std::size_t>(width) *
+        static_cast<std::size_t>(height) *
+        static_cast<std::size_t>(channels);
+
+    texture.hdrPixels.assign(
+        pixels,
+        pixels + pixelCount
+    );
+
     stbi_image_free(pixels);
+
     return texture;
 }
 
@@ -314,65 +335,18 @@ void dragon(hittable_list& world, Scene& scene)  {
     glm::mat4 modelTransform{1.0f};
     modelTransform = glm::translate(modelTransform,glm::vec3(278.0f,100.0f,250.0f));
     modelTransform = glm::scale(modelTransform,glm::vec3(100.0f));
-    modelTransform = glm::rotate(modelTransform,glm::radians(180.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+    modelTransform = glm::rotate(modelTransform,glm::radians(100.0f), glm::vec3(0.0f, 1.0f, 0.0f));
     if (!GltfLoader::Load("Assets/DragonDispersion.glb",scene,modelTransform)) {
         std::cerr << "Model loading failed\n";
     }
-    // if (!GltfLoader::Load("Assets/Sponza/glTF/Sponza.gltf",scene,modelTransform)) {
-    //     std::cerr << "Model loading failed\n";
-    // }
-    std::cerr
-    << "Scene mesh count: "
-    << scene.GetMeshes().size()
-    << '\n'
-    << "Scene mesh instance count: "
-    << scene.GetMeshInstances().size()
-    << '\n';
 
-    for (
-        std::size_t meshIndex = 0;
-        meshIndex < scene.GetMeshes().size();
-        ++meshIndex
-    )
-    {
-        const SceneMesh& mesh =
-            scene.GetMeshes()[meshIndex];
-
-        std::cerr
-            << "Mesh "
-            << meshIndex
-            << ":\n"
-            << "  vertices: "
-            << mesh.vertices.size()
-            << '\n'
-            << "  triangles: "
-            << mesh.triangles.size()
-            << '\n'
-            << "  bounds min: "
-            << mesh.boundsMin.x << ", "
-            << mesh.boundsMin.y << ", "
-            << mesh.boundsMin.z << '\n'
-            << "  bounds max: "
-            << mesh.boundsMax.x << ", "
-            << mesh.boundsMax.y << ", "
-            << mesh.boundsMax.z << '\n';
-    }
-    for (
-    std::size_t instanceIndex = 0;
-    instanceIndex < scene.GetMeshInstances().size();
-    ++instanceIndex
-)
-    {
-        const SceneMeshInstance& instance =
-            scene.GetMeshInstances()[instanceIndex];
-
-        std::cerr
-            << "Mesh instance "
-            << instanceIndex
-            << " references mesh "
-            << instance.mesh
-            << '\n';
-    }
+    SceneTexture hdrTexture = LoadHDR("Assets/HDRI/harbour.hdr");
+    TextureId hdrTextureId = scene.addTexture(std::move(hdrTexture));
+    SceneEnvironment environment;
+    environment.texture = hdrTextureId;
+    environment.intensity = 2.0f;
+    environment.rotation = glm::vec3(0.0f);
+    scene.SetEnvironment(environment);
 
     SceneCamera sceneCamera;
     sceneCamera.lookFrom = glm::vec3(278, 278, -800);
