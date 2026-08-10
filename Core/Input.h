@@ -5,7 +5,7 @@
 #ifndef NB_RENDERER_INPUT_H
 #define NB_RENDERER_INPUT_H
 #include <GLFW/glfw3.h>
-#include "editorcamera.h"
+#include "../Editor/editorcamera.h"
 
 
 class Input

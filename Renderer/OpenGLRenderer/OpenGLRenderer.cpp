@@ -3,12 +3,12 @@
 //
 #include "OpenGLRenderer.h"
 #include "Shaders/shader.h"
-#include "Window.h"
+#include "../../Core/Window.h"
 #include <iostream>
 #include <algorithm>
 #include <limits>
 #include <vector>
-#include "BvhBuilder.h"
+#include "../../Core/BvhBuilder.h"
 
 namespace {
     constexpr int RenderWidth = 640;

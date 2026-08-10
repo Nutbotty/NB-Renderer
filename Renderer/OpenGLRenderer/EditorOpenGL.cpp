@@ -5,11 +5,11 @@
 #include "EditorOpenGL.h"
 #include <iostream>
 #include "Shaders/shader.h"
-#include "editorcamera.h"
-#include "../external/glm/glm/gtc/matrix_transform.hpp"
-#include "Window.h"
-#include "Input.h"
-#include "BvhBuilder.h"
+#include "../../Editor/editorcamera.h"
+#include "../../external/glm/glm/gtc/matrix_transform.hpp"
+#include "../../Core/Window.h"
+#include "../../Core/Input.h"
+#include "../../Core/BvhBuilder.h"
 
 namespace {
 // settings
@@ -171,9 +171,9 @@ void viewport(const Scene& scene) {
     glEnable(GL_DEPTH_TEST);
     // build and compile our shader program
     // ------------------------------------
-    Shader ourShader("OpenGLRenderer/Shaders/shader.vs", "OpenGLRenderer/Shaders/shader.fs"); // you can name your shader files however you like
-    Shader computeShader("OpenGLRenderer/Shaders/editor.comp");
-    Shader fullscreenShader("OpenGLRenderer/Shaders/render.vs","OpenGLRenderer/Shaders/render.fs");
+    Shader ourShader("Renderer/OpenGLRenderer/Shaders/shader.vs", "Renderer/OpenGLRenderer/Shaders/shader.fs"); // you can name your shader files however you like
+    Shader computeShader("Renderer/OpenGLRenderer/Shaders/editor.comp");
+    Shader fullscreenShader("Renderer/OpenGLRenderer/Shaders/render.vs","Renderer/OpenGLRenderer/Shaders/render.fs");
     const GLuint materialBuffer = CreateStorageBuffer(MaterialBufferBinding, gpuMaterials.data(),
         gpuMaterials.size() * sizeof(GpuMaterial));
     const GLuint sphereBuffer = CreateStorageBuffer(SphereBufferBinding,gpuSpheres.data(),

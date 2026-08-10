@@ -2,7 +2,7 @@
 // Created by Nutbotty on 7/20/2026.
 //
 
-#include "Input.h"
+#include "../Core/Input.h"
 
 Input::Input(EditorCamera& camera) : m_Camera(camera) {}
 

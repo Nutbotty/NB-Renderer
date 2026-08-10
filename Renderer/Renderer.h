@@ -5,6 +5,8 @@
 #ifndef NB_RENDERER_RENDERER_H
 #define NB_RENDERER_RENDERER_H
 #include <cstdint>
+#include "../Core/Window.h"
+#include "../Editor/editorcamera.h"
 
 enum class RenderBackend {
     OpenGL,

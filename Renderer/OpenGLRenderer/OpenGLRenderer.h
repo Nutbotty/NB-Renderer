@@ -7,8 +7,8 @@
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-#include "../Scene/scene.h"
-#include "editorcamera.h"
+#include "../../Editor/editorcamera.h"
+#include "../../Scene/scene.h"
 
 int Renderer(const Scene& scene);
 

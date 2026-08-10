@@ -8,16 +8,16 @@
 #include "CPURenderer/Tri.h"
 #include "CPURenderer/material.h"
 #include "CPURenderer/texture.h"
-#include "OpenGLRenderer/EditorOpenGL.h"
+#include "Renderer/OpenGLRenderer/EditorOpenGL.h"
 #include <chrono>
 #define STB_IMAGE_IMPLEMENTATION
 #include "external/stb_image.h"
 
-#include "OpenGLRenderer/editorcamera.h"
+#include "Editor/editorcamera.h"
 #include "Scene/scene.h"
 #include "Scene/ModelLoader.h"
 #include "CPURenderer/CPURenderer.h"
-#include "OpenGLRenderer/OpenGLRenderer.h"
+#include "Renderer/OpenGLRenderer/OpenGLRenderer.h"
 #include "external/fastgltf/include/fastgltf/core.hpp"
 
 std::vector<std::shared_ptr<material>>
