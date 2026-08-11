@@ -52,7 +52,7 @@ private:
     static unsigned int CreateHdrTexture(const SceneTexture& texture);
 
     Window* m_Window = nullptr;
-    std::unique_ptr<Shader> m_RenderCompShader;
+    std::unique_ptr<Shader> m_EditorCompShader;
     std::unique_ptr<Shader> m_FinalCompShader;
 
     unsigned int m_OutputTexture = 0;
