@@ -14,11 +14,11 @@
 
 class Shader;
 
-class OpenGlRenderer final : public Renderer {
+class OpenGLRenderer final : public Renderer {
 public:
-    OpenGlRenderer() = default;
+    OpenGLRenderer() = default;
 
-    ~OpenGlRenderer() override = default;
+    ~OpenGLRenderer() override = default;
 
     void Initialize(Window& window) override;
     void Shutdown() override;
