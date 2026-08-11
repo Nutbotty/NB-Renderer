@@ -52,7 +52,7 @@ private:
     static unsigned int CreateHdrTexture(const SceneTexture& texture);
 
     Window* m_Window = nullptr;
-    std::unique_ptr<Shader> m_InteractiveCompShader;
+    std::unique_ptr<Shader> m_RenderCompShader;
     std::unique_ptr<Shader> m_FinalCompShader;
 
     unsigned int m_OutputTexture = 0;
@@ -74,7 +74,7 @@ private:
     unsigned int m_EnvironmentTexture = 0;
 
     BvhBuildResult m_GpuScene;
-    std::uint32_t m_AccumulationFrame = 0;
+    std::uint32_t m_AccumulationSamples = 0;
     bool m_SceneUploaded = false;
 };
 
