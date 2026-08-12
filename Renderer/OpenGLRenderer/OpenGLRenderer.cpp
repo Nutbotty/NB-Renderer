@@ -103,7 +103,7 @@ void OpenGLRenderer::UploadEnvironment(const Scene& scene) {
 }
 
 void OpenGLRenderer::CreateOutputTexture(std::uint32_t width, std::uint32_t height) {
-    // DestroyOutputTexture();
+    DestroyOutputTexture();
     m_RenderWidth = width;
     m_RenderHeight = height;
     glGenTextures(1, &m_OutputTexture);
@@ -229,6 +229,32 @@ void OpenGLRenderer::DestroySceneResources() {
     m_BlasBuffer = 0;
     m_EnvironmentTexture = 0;
     m_SceneUploaded = false;
+}
+
+void OpenGLRenderer::Resize(std::uint32_t width, std::uint32_t height) {
+    if (width == 0 || height == 0) {
+        return;
+    }
+    if (width == m_RenderWidth && height == m_RenderHeight) {
+        return;
+    }
+    CreateOutputTexture(width, height);
+}
+
+void OpenGLRenderer::DestroyOutputTexture()
+{
+    if (m_OutputTexture != 0)
+    {
+        glDeleteTextures(
+            1,
+            &m_OutputTexture
+        );
+
+        m_OutputTexture = 0;
+    }
+
+    m_RenderWidth = 0;
+    m_RenderHeight = 0;
 }
 
 GLuint OpenGLRenderer::CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {

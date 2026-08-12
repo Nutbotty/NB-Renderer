@@ -7,12 +7,11 @@
 
 #include "../Renderer.h"
 #include "../../Core/BvhBuilder.h"
+#include "Shaders/shader.h"
 
 #include <cstdint>
 #include <memory>
 #include <vector>
-
-class Shader;
 
 class OpenGLRenderer final : public Renderer {
 public:
@@ -39,6 +38,7 @@ private:
     void UploadEnvironment(const Scene& scene);
     void DestroySceneResources();
     void CreateOutputTexture(std::uint32_t width, std::uint32_t height);
+    void Resize(std::uint32_t width, std::uint32_t height) override;
     void DestroyOutputTexture();
 
     // Rendering
