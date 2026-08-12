@@ -26,8 +26,8 @@ public:
     void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) override;
     void ResetAccumulation() override;
 
-    [[nodiscard]] std::uint32_t GetAccumulationFrame() const override{
-        return m_AccumulationFrame;
+    [[nodiscard]] std::uint32_t GetAccumulationSamples() const override{
+        return m_AccumulationSamples;
     }
     [[nodiscard]] RenderBackend GetBackend() const override {
         return RenderBackend::OpenGL;
@@ -48,7 +48,7 @@ private:
     void DispatchCompute(const Scene& scene, const EditorCamera& camera);
 
     // Helpers
-    static unsigned int CreateStorageBuffer(unsigned int binding, const void* data, std::size_t size);
+    GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size);
     static unsigned int CreateHdrTexture(const SceneTexture& texture);
 
     Window* m_Window = nullptr;

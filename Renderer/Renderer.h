@@ -39,7 +39,7 @@ public:
     virtual void Resize(std::uint32_t width, std::uint32_t height) = 0;
     virtual void ResetAccumulation();
 
-    [[nodiscard]] virtual std::uint32_t GetAccumulationFrame() const = 0;
+    [[nodiscard]] virtual std::uint32_t GetAccumulationSamples() const = 0;
     [[nodiscard]] virtual RenderBackend GetBackend() const;
 };
 

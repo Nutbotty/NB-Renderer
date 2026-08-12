@@ -103,7 +103,7 @@ void OpenGLRenderer::UploadEnvironment(const Scene& scene) {
 }
 
 void OpenGLRenderer::CreateOutputTexture(std::uint32_t width, std::uint32_t height) {
-    DestroyOutputTexture();
+    // DestroyOutputTexture();
     m_RenderWidth = width;
     m_RenderHeight = height;
     glGenTextures(1, &m_OutputTexture);
@@ -173,9 +173,19 @@ void OpenGLRenderer::SetCameraUniforms(const EditorCamera& camera) {
     shader.setFloat("uCameraDefocusAngle", camera.DefocusAngle);
 }
 
+void OpenGLRenderer::SetEnvironmentUniforms(const Scene &scene) {
+    Shader& shader = *m_EditorCompShader;
+    auto environment = scene.GetEnvironment();
+    shader.setFloat("uEnvironmentIntensity", environment.intensity);
+    shader.setVec3("uEnvironmentRotation", glm::radians(environment.rotation));
+}
+
+void OpenGLRenderer::ResetAccumulation() {
+    m_AccumulationSamples = 0;
+}
+
 void OpenGLRenderer::Shutdown() {
     DestroySceneResources();
-    DestroyOutputTexture();
     m_EditorCompShader.reset();
     m_FinalCompShader.reset();
     m_Window = nullptr;
@@ -221,7 +231,7 @@ void OpenGLRenderer::DestroySceneResources() {
     m_SceneUploaded = false;
 }
 
-GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
+GLuint OpenGLRenderer::CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     GLuint buffer = 0;
     glGenBuffers(1,&buffer);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER,buffer);
@@ -231,7 +241,7 @@ GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size) {
     return buffer;
 }
 
-GLuint CreateHdrTexture(const SceneTexture& texture) {
+GLuint OpenGLRenderer::CreateHdrTexture(const SceneTexture& texture) {
     if (texture.type != SceneTextureType::HDR) {
         throw std::invalid_argument("CreateHdrTexture requires an HDR SceneTexture");
     }
