@@ -38,6 +38,8 @@ private:
     std::unique_ptr<ImGuiBackend> m_ImGuiBackend;
     bool m_Initialized = false;
     bool m_ShowScenePanel = true;
+    bool m_ViewportHovered = false;
+    bool m_ViewportFocused = false;
     bool m_ShowViewport = true;
     bool m_ShowRendererPanel = true;
 };
