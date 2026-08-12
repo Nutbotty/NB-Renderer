@@ -118,6 +118,8 @@ void OpenGLRenderer::CreateOutputTexture(std::uint32_t width, std::uint32_t heig
 }
 
 void OpenGLRenderer::Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) {
+    glClearColor(0.1f, 0.4f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
     if (!m_SceneUploaded) {
         SetScene(scene);
     }
