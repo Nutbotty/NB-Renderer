@@ -231,6 +231,12 @@ void OpenGLRenderer::DestroySceneResources() {
     m_SceneUploaded = false;
 }
 
+void OpenGLRenderer::Present() {
+    if (m_Window) {
+        m_Window->SwapBuffers();
+    }
+}
+
 void OpenGLRenderer::Resize(std::uint32_t width, std::uint32_t height) {
     if (width == 0 || height == 0) {
         return;

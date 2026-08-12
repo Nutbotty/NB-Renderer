@@ -38,6 +38,7 @@ private:
     void UploadEnvironment(const Scene& scene);
     void DestroySceneResources();
     void CreateOutputTexture(std::uint32_t width, std::uint32_t height);
+    void Present() override;
     void Resize(std::uint32_t width, std::uint32_t height) override;
     void DestroyOutputTexture();
 
