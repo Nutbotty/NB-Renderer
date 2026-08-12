@@ -13,6 +13,16 @@
 #include "../Scene/scene.h"
 #include "../Core/Input.h"
 
+struct CameraState {
+    glm::vec3 Position{0.0f};
+    glm::vec3 LookAt{0.0f};
+    glm::vec3 Up{0.0f};
+
+    float VerticalFov = 20.0f;
+    float FocusDistance = 0.0f;
+    float DefocusAngle = 0.0f;
+};
+
 class EditorLayer {
 public:
     EditorLayer() = default;
@@ -34,6 +44,7 @@ private:
     void DrawViewport(Renderer& renderer);
 
     EditorCamera m_Camera;
+    CameraState m_PreviousCameraState;
     std::unique_ptr<Input> m_Input;
     std::unique_ptr<ImGuiBackend> m_ImGuiBackend;
     bool m_Initialized = false;

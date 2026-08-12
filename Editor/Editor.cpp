@@ -11,15 +11,6 @@
 
 namespace {
     constexpr float CameraEpsilon = 1e-8f;
-    struct CameraState {
-        glm::vec3 Position{0.0f};
-        glm::vec3 LookAt{0.0f};
-        glm::vec3 Up{0.0f};
-
-        float VerticalFov = 20.0f;
-        float FocusDistance = 0.0f;
-        float DefocusAngle = 0.0f;
-    };
 
     CameraState CaptureCameraState(const EditorCamera& camera) {
         CameraState state;
@@ -65,7 +56,32 @@ void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& sc
 
     m_ImGuiBackend = ImGuiBackend::Create(renderer.GetBackend());
     m_ImGuiBackend->Initialize(window);
+    m_PreviousCameraState = CaptureCameraState(m_Camera);
     m_Initialized = true;
+}
+
+void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
+    DrawMenu(scene, renderer);
+    const CameraState before = CaptureCameraState(m_Camera);
+    if (m_ShowScenePanel) {
+        DrawScenePanel(scene);
+    }
+
+    if (m_ShowViewport) {
+        DrawViewport(renderer);
+    } else {
+        m_ViewportHovered = false;
+        m_ViewportFocused = false;
+    }
+
+    if (m_ViewportHovered && m_ViewportFocused) {
+        m_Input->Update(deltaTime);
+    }
+    const CameraState current = CaptureCameraState(m_Camera);
+    if (CameraStateChanged(m_PreviousCameraState, current)) {
+        renderer.ResetAccumulation();
+    }
+    m_PreviousCameraState = current;
 }
 
 void EditorLayer::BeginFrame() {
@@ -73,25 +89,6 @@ void EditorLayer::BeginFrame() {
     m_ImGuiBackend->BeginFrame();
     ImGui::NewFrame();
     ImGui::DockSpaceOverViewport();
-}
-
-void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
-    assert(m_Initialized);
-
-    ImGuiIO& io = ImGui::GetIO();
-
-    if (!io.WantCaptureMouse && !io.WantCaptureKeyboard) {
-        //camera
-    }
-
-    DrawMenu(scene, renderer);
-    if (m_ShowScenePanel) {
-        DrawScenePanel(scene);
-    }
-
-    if (m_ShowViewport) {
-        DrawViewport(renderer);
-    }
 }
 
 void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
