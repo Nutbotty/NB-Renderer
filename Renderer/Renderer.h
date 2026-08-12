@@ -41,6 +41,7 @@ public:
 
     [[nodiscard]] virtual std::uint32_t GetAccumulationSamples() const = 0;
     [[nodiscard]] virtual RenderBackend GetBackend() const = 0;
+    [[nodiscard]] virtual void* GetViewportTexture() const = 0;
 };
 
 #endif //NB_RENDERER_RENDERER_H

@@ -31,6 +31,9 @@ public:
     [[nodiscard]] RenderBackend GetBackend() const override {
         return RenderBackend::OpenGL;
     }
+    [[nodiscard]] void* GetViewportTexture() const override {
+        return reinterpret_cast<void*>(static_cast<intptr_t>(m_OutputTexture));
+    }
 private:
 
     // GPU Resource Management
