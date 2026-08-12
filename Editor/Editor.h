@@ -11,6 +11,7 @@
 #include "../Core/Window.h"
 #include "../Renderer/Renderer.h"
 #include "../Scene/scene.h"
+#include "../Core/Input.h"
 
 class EditorLayer {
 public:
@@ -32,8 +33,8 @@ private:
     void DrawScenePanel(Scene& scene);
     void DrawViewport(Renderer& renderer);
 
-private:
     EditorCamera m_Camera;
+    std::unique_ptr<Input> m_Input;
     std::unique_ptr<ImGuiBackend> m_ImGuiBackend;
     bool m_Initialized = false;
     bool m_ShowScenePanel = true;
