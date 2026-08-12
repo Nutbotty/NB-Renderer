@@ -3,34 +3,44 @@
 //
 #include "Application.h"
 
+#include <stdexcept>
+
+#include "../Renderer/OpenGLRenderer/OpenGLRenderer.h"
+
+Application::Application(Scene scene)
+    : m_Window(2560, 1440, "NB Renderer"),
+      m_LastFrameTime(std::chrono::steady_clock::now()) {
+    if (m_Window.Initialize() != 0) {
+        throw std::runtime_error("Failed to initialize window");
+    }
+    /*
+     * Create our currently selected graphics backend.
+     */
+    m_Scene = scene;
+    m_Renderer = Renderer::Create(RenderBackend::OpenGL);
+    if (!m_Renderer) {
+        throw std::runtime_error("Failed to create renderer");
+    }
+    /*
+     * OpenGL context already exists at this point.
+     */
+    m_Renderer->Initialize(m_Window);
+    /*
+     * Initialize ImGui/editor after the renderer/context
+     * exists.
+     */
+    m_Editor.Initialize(m_Window, *m_Renderer, m_Scene);
+}
+
+Application::~Application() {}
 
 void Application::Run() {
-    while (
-        !m_Window.ShouldClose()
-        && m_Running
-    )
-    {
+    while (!m_Window.ShouldClose() && m_Running) {
         m_Window.PollEvents();
-
-        // float deltaTime = CalculateDeltaTime();
-
-        // m_Editor.BeginFrame();
-        //
-        // m_Editor.Update(
-        //     m_Scene,
-        //     *m_Renderer,
-        //     deltaTime
-        // );
-        //
-        // m_Renderer->Render(
-        //     m_Scene,
-        //     m_Editor.GetCamera()
-        // );
-        //
-        // m_Editor.Render(
-        //     *m_Renderer
-        // );
-        //
-        // m_Window.Present();
+        float deltaTime = CalculateDeltaTime();
+        m_Editor.BeginFrame();
+        m_Editor.Update(m_Scene, *m_Renderer, deltaTime);
+        m_Renderer->Render(m_Scene, m_Editor.GetEditorCamera(), RenderSettings{});
+        m_Editor.Render();
     }
 }

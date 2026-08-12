@@ -14,7 +14,7 @@
 
 class Application {
 public:
-    Application();
+    Application(Scene scene);
     ~Application();
 
     void Run();
@@ -24,6 +24,10 @@ public:
         m_LastFrameTime = now;
         return std::min(elapsed.count(), 0.1f);
     };
+
+    Scene GetScene() {
+        return m_Scene;
+    }
 
 private:
     Window m_Window;
