@@ -9,6 +9,46 @@
 #include <cassert>
 #include "ImGuiBackend.h"
 
+namespace {
+    constexpr float CameraEpsilon = 1e-8f;
+    struct CameraState {
+        glm::vec3 Position{0.0f};
+        glm::vec3 LookAt{0.0f};
+        glm::vec3 Up{0.0f};
+
+        float VerticalFov = 20.0f;
+        float FocusDistance = 0.0f;
+        float DefocusAngle = 0.0f;
+    };
+
+    CameraState CaptureCameraState(const EditorCamera& camera) {
+        CameraState state;
+        state.Position = camera.LookFrom;
+        state.LookAt = camera.LookAt;
+        state.Up = camera.VUp;
+        state.VerticalFov = camera.VerticalFov;
+        state.FocusDistance = camera.FocusDistance;
+        state.DefocusAngle = camera.DefocusAngle;
+        return state;
+    }
+    bool NearlyEqual(const glm::vec3& a, const glm::vec3& b) {
+        const glm::vec3 difference = a - b;
+        return glm::dot(difference, difference) <= CameraEpsilon * CameraEpsilon;
+    }
+    bool NearlyEqual(float a, float b) {
+        return std::abs(a - b) <= CameraEpsilon;
+    }
+
+    bool CameraStateChanged(const CameraState& before, const CameraState& after) {
+        return !NearlyEqual(before.Position, after.Position) ||
+            !NearlyEqual(before.LookAt, after.LookAt) ||
+            !NearlyEqual(before.Up, after.Up) ||
+            !NearlyEqual(before.VerticalFov, after.VerticalFov) ||
+            !NearlyEqual(before.FocusDistance, after.FocusDistance) ||
+            !NearlyEqual(before.DefocusAngle, after.DefocusAngle);
+    }
+}
+
 void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& scene) {
     assert(!m_Initialized);
     m_Camera = EditorCamera(scene.GetCamera());
