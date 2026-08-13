@@ -247,6 +247,10 @@ public:
     [[nodiscard]]const SceneEnvironment& GetEnvironment() const {
         return m_Environment;
     }
+
+    SceneEnvironment& GetEnvironment() {
+        return m_Environment;
+    }
     [[nodiscard]] const SceneCamera& GetCamera() const {
         return m_Camera;
     }

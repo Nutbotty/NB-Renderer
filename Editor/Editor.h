@@ -41,7 +41,9 @@ public:
 private:
     void DrawMenu(Scene& scene, Renderer& renderer);
     void DrawScenePanel(Scene& scene);
+    void DrawEnvironmentPanel(Scene& scene, Renderer& renderer);
     void DrawViewport(Renderer& renderer);
+
 
     EditorCamera m_Camera;
     CameraState m_PreviousCameraState;
@@ -49,6 +51,7 @@ private:
     std::unique_ptr<ImGuiBackend> m_ImGuiBackend;
     bool m_Initialized = false;
     bool m_ShowScenePanel = true;
+    bool m_ShowEnvironmentPanel = true;
     bool m_ViewportHovered = false;
     bool m_ViewportFocused = false;
     bool m_ShowViewport = true;

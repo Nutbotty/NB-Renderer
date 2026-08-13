@@ -71,6 +71,9 @@ void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
         m_ViewportHovered = false;
         m_ViewportFocused = false;
     }
+    if (m_ShowEnvironmentPanel) {
+        DrawEnvironmentPanel(scene, renderer);
+    }
     m_Input->Update(deltaTime, m_ViewportHovered, m_ViewportFocused);
     const CameraState currentCameraState = CaptureCameraState(m_Camera);
     if (CameraStateChanged(m_PreviousCameraState, currentCameraState)) {
@@ -103,9 +106,9 @@ void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
         }
         ImGui::EndMenu();
     }
-
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Scene", nullptr, &m_ShowScenePanel);
+        ImGui::MenuItem("Environment", nullptr, &m_ShowEnvironmentPanel);
         ImGui::MenuItem("Viewport", nullptr, &m_ShowViewport);
         ImGui::MenuItem("Renderer", nullptr, &m_ShowRendererPanel);
         ImGui::EndMenu();
@@ -125,6 +128,47 @@ void EditorLayer::DrawScenePanel(Scene& scene) {
     ImGui::Text("Spheres: %zu", scene.GetSpheres().size());
     ImGui::Text("Meshes: %zu", scene.GetMeshes().size());
     ImGui::Text("Mesh Instances: %zu", scene.GetMeshInstances().size() );
+    ImGui::End();
+}
+
+void EditorLayer::DrawEnvironmentPanel(
+    Scene& scene,
+    Renderer& renderer
+)
+{
+    ImGui::Begin(
+        "Environment",
+        &m_ShowEnvironmentPanel
+    );
+
+    SceneEnvironment& environment =
+        scene.GetEnvironment();
+
+    bool changed = false;
+
+    changed |=
+        ImGui::DragFloat(
+            "Intensity",
+            &environment.intensity,
+            0.01f,
+            0.0f,
+            100.0f,
+            "%.2f"
+        );
+
+    changed |=
+        ImGui::DragFloat3(
+            "Rotation",
+            &environment.rotation.x,
+            0.5f,
+            -360.0f,
+            360.0f,
+            "%.1f deg"
+        );
+
+    if (changed) {
+        renderer.ResetAccumulation();
+    }
     ImGui::End();
 }
 
