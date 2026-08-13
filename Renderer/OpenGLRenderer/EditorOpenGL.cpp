@@ -48,10 +48,14 @@ namespace {
 
         for (const SceneMaterial& material :scene.GetMaterials()) {
             GpuMaterial gpuMaterial;
-            gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
-            gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
+            gpuMaterial.BaseColor = material.baseColor;
+            gpuMaterial.Surface =
+            glm::vec4(material.metallic, material.roughness, material.indexOfRefraction, material.transmission);
             gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
             gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
+
+            gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
+            gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
             result.push_back(gpuMaterial);
         }
         return result;
