@@ -28,7 +28,9 @@ enum class SceneTextureType {
 enum class MaterialType : std::uint32_t {
     Lambertian = 0,
     Metal = 1,
-    Dielectric = 2
+    Dielectric = 2,
+    volumetric = 3,
+    PbrMetalRough = 4
 };
 struct SceneTexture {
     SceneTextureType type;
@@ -47,11 +49,18 @@ struct SceneEnvironment {
 };
 struct SceneMaterial {
     MaterialType type = MaterialType::Lambertian;
-    glm::vec3 albedo{1.0f, 1.0f, 1.0f};
-    float fuzz = 0.0f;
-    float indexOfRefraction = 1.0f;
+    glm::vec4 baseColor{1.0f, 1.0f, 1.0f, 1.0f};
+    float metallic = 0.0f;
+    float roughness = 0.5f;
+
     glm::vec3 emission{0.0, 0.0, 0.0};
     float emissionStrength = 0.0;
+    float transmission = 0.0;
+    float indexOfRefraction = 1.0f;
+
+
+    glm::vec3 albedo{1.0f, 1.0f, 1.0f};
+    float fuzz = 0.0f;
 };
 
 //primitive
