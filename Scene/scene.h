@@ -39,8 +39,11 @@ struct SceneTexture {
 };
 struct SceneEnvironment {
     TextureId texture;
+    bool HDRI = false;
     float intensity = 1.0f;
     glm::vec3 rotation{0.0f, 0.0f, 0.0f};
+    glm::vec3 color1{1.0, 1.0, 1.0};
+    glm::vec3 color2{0.5, 0.7, 1.0};
 };
 struct SceneMaterial {
     MaterialType type = MaterialType::Lambertian;
