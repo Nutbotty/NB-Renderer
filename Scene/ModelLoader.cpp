@@ -20,6 +20,14 @@
 // This file was created with the assitance of generative AI and is not my own work
 namespace
 {
+
+    constexpr auto options =
+    fastgltf::Options::LoadExternalBuffers
+    |
+    fastgltf::Options::LoadExternalImages
+    |
+    fastgltf::Options::GenerateMeshIndices;
+    
     glm::vec3 ToGlmVec3(
         const fastgltf::math::nvec3& value
     )
@@ -39,6 +47,17 @@ namespace
             static_cast<float>(value[0]),
             static_cast<float>(value[1]),
             static_cast<float>(value[2])
+        );
+    }
+    glm::vec4 ToGlmVec4(
+    const fastgltf::math::nvec4& value
+)
+    {
+        return glm::vec4(
+            static_cast<float>(value[0]),
+            static_cast<float>(value[1]),
+            static_cast<float>(value[2]),
+            static_cast<float>(value[3])
         );
     }
 
@@ -74,7 +93,7 @@ namespace
     {
         return scene.addMaterial(
             MaterialType::Lambertian,
-            glm::vec3(0.8f),
+            glm::vec3(0.1f),
             0.0f,
             1.0f
         );
@@ -85,6 +104,7 @@ namespace
         Scene& scene
     )
     {
+
         std::vector<MaterialId> materialMap;
 
         materialMap.reserve(
@@ -96,20 +116,84 @@ namespace
             asset.materials
         )
         {
+            std::size_t materialIndex = 0;
+
+            for (
+                const fastgltf::Material& gltfMaterial :
+                asset.materials
+            ) {
+                const auto& pbr =
+                    gltfMaterial.pbrData;
+
+                std::cerr
+                    << "Material "
+                    << materialIndex
+                    << ":\n";
+
+                std::cerr
+                    << "  baseColorFactor = "
+                    << pbr.baseColorFactor[0] << ", "
+                    << pbr.baseColorFactor[1] << ", "
+                    << pbr.baseColorFactor[2] << ", "
+                    << pbr.baseColorFactor[3] << '\n';
+
+                std::cerr
+                    << "  metallicFactor = "
+                    << pbr.metallicFactor
+                    << '\n';
+
+                std::cerr
+                    << "  roughnessFactor = "
+                    << pbr.roughnessFactor
+                    << '\n';
+
+                if (pbr.baseColorTexture.has_value())
+                {
+                    std::cerr
+                        << "  baseColorTexture = "
+                        << pbr.baseColorTexture
+                               ->textureIndex
+                        << '\n';
+                }
+                else
+                {
+                    std::cerr
+                        << "  baseColorTexture = NONE\n";
+                }
+
+                if (
+                    pbr.metallicRoughnessTexture
+                        .has_value()
+                )
+                {
+                    std::cerr
+                        << "  metallicRoughnessTexture = "
+                        << pbr.metallicRoughnessTexture
+                               ->textureIndex
+                        << '\n';
+                }
+                else
+                {
+                    std::cerr
+                        << "  metallicRoughnessTexture = NONE\n";
+                }
+
+                ++materialIndex;
+            }
             const auto& pbr =
                 gltfMaterial.pbrData;
 
-            const glm::vec3 albedo =
-                ToGlmVec3(
+            SceneMaterial material;
+
+            material.type =
+                MaterialType::PbrMetalRough;
+
+            material.baseColor =
+                ToGlmVec4(
                     pbr.baseColorFactor
                 );
 
-            const glm::vec3 emission =
-                ToGlmVec3(
-                    gltfMaterial.emissiveFactor
-                );
-
-            const float metallic =
+            material.metallic =
                 std::clamp(
                     static_cast<float>(
                         pbr.metallicFactor
@@ -118,7 +202,7 @@ namespace
                     1.0f
                 );
 
-            const float roughness =
+            material.roughness =
                 std::clamp(
                     static_cast<float>(
                         pbr.roughnessFactor
@@ -127,41 +211,37 @@ namespace
                     1.0f
                 );
 
-            MaterialType materialType =
-                MaterialType::Lambertian;
+            material.emission =
+                ToGlmVec3(
+                    gltfMaterial.emissiveFactor
+                );
 
-            /*
-             * Your renderer has a simpler material model than
-             * glTF's metallic-roughness PBR model, so this is
-             * necessarily an approximation.
-             */
-            if (
-                gltfMaterial.transmission
-                && gltfMaterial.transmission
-                       ->transmissionFactor > 0.5f
-            )
+            material.emissionStrength =
+                static_cast<float>(
+                    gltfMaterial.emissiveStrength
+                );
+
+            material.indexOfRefraction =
+                static_cast<float>(
+                    gltfMaterial.ior
+                );
+
+            if (gltfMaterial.transmission)
             {
-                materialType =
-                    MaterialType::Dielectric;
-            }
-            else if (metallic > 0.5f)
-            {
-                materialType =
-                    MaterialType::Metal;
+                material.transmission =
+                    std::clamp(
+                        static_cast<float>(
+                            gltfMaterial.transmission
+                                ->transmissionFactor
+                        ),
+                        0.0f,
+                        1.0f
+                    );
             }
 
             const MaterialId materialId =
                 scene.addMaterial(
-                    materialType,
-                    albedo,
-                    roughness,
-                    static_cast<float>(
-                        gltfMaterial.ior
-                    ),
-                    emission,
-                    static_cast<float>(
-                        gltfMaterial.emissiveStrength
-                    )
+                    material
                 );
 
             materialMap.push_back(

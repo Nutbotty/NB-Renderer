@@ -354,6 +354,308 @@ bool scatterDielectric(Ray r_in, HitRecord rec, Material material, out vec3 atte
     scattered = Ray(rec.p, direction);
     return true;
 }
+
+vec3 fresnelSchlick(float cosTheta, vec3 F0) {
+    return F0 + (vec3(1.0) - F0) * pow(1.0 - clamp(cosTheta, 0.0, 1.0), 5.0);
+}
+float luminance(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+bool scatterPbrMetallicRoughness(
+        Ray rayIn,
+        HitRecord rec,
+        Material material,
+        out vec3 attenuation,
+        out Ray scattered
+)
+{
+    float metallic =
+    clamp(
+            material.metallic,
+            0.0,
+            1.0
+    );
+
+    float roughness =
+    clamp(
+            material.roughness,
+            0.02,
+            1.0
+    );
+
+    float transmission =
+    clamp(
+            material.transmission,
+            0.0,
+            1.0
+    );
+
+    /*
+     * ==========================================
+     * Transmission
+     * ==========================================
+     *
+     * This is still an approximation of
+     * KHR_materials_transmission, but it gives
+     * glTF glass materials sensible behavior.
+     *
+     * Metals don't transmit.
+     */
+    float transmissionProbability =
+    transmission
+    * (1.0 - metallic);
+
+    if (
+        transmissionProbability > 0.0
+        && randomFloat()
+        < transmissionProbability
+    )
+    {
+        attenuation =
+        vec3(1.0);
+
+        float ri =
+        rec.frontFace
+        ? (
+        1.0
+        / material.refractionIndex
+        )
+        : material.refractionIndex;
+
+        vec3 unitDirection =
+        normalize(
+                rayIn.direction
+        );
+
+        float cosTheta =
+        min(
+                dot(
+                        -unitDirection,
+                        rec.normal
+                ),
+                1.0
+        );
+
+        float sinTheta =
+        sqrt(
+                max(
+                        0.0,
+                        1.0
+                        - cosTheta * cosTheta
+                )
+        );
+
+        bool cannotRefract =
+        ri * sinTheta > 1.0;
+
+        vec3 direction;
+
+        if (
+            cannotRefract
+            || reflectance(
+                cosTheta,
+                ri
+        ) > randomFloat()
+        )
+        {
+            direction =
+            reflect(
+                    unitDirection,
+                    rec.normal
+            );
+        }
+        else
+        {
+            direction =
+            refract(
+                    unitDirection,
+                    rec.normal,
+                    ri
+            );
+        }
+
+        scattered =
+        Ray(
+                rec.p,
+                direction
+        );
+
+        return true;
+    }
+
+    /*
+     * ==========================================
+     * Metallic-roughness surface
+     * ==========================================
+     */
+
+    vec3 V =
+    normalize(
+            -rayIn.direction
+    );
+
+    float NoV =
+    max(
+            dot(
+                    rec.normal,
+                    V
+            ),
+            0.0
+    );
+
+    /*
+     * Dielectric:
+     *
+     *      F0 ~= 0.04
+     *
+     * Metal:
+     *
+     *      F0 = baseColor
+     */
+    vec3 F0 =
+    mix(
+            vec3(0.04),
+            material.albedo,
+            metallic
+    );
+
+    vec3 F =
+    fresnelSchlick(
+            NoV,
+            F0
+    );
+
+    /*
+     * Remaining diffuse component.
+     *
+     * Metals have no diffuse lobe.
+     */
+    vec3 diffuseWeight =
+    (vec3(1.0) - F)
+    * (1.0 - metallic)
+    * material.albedo;
+
+    vec3 specularWeight =
+    F;
+
+    float diffuseEnergy =
+    luminance(
+            diffuseWeight
+    );
+
+    float specularEnergy =
+    luminance(
+            specularWeight
+    );
+
+    float totalEnergy =
+    diffuseEnergy
+    + specularEnergy;
+
+    if (totalEnergy <= EPSILON)
+    {
+        return false;
+    }
+
+    float specularProbability =
+    clamp(
+            specularEnergy
+            / totalEnergy,
+            0.05,
+            0.95
+    );
+
+    /*
+     * ==========================================
+     * Specular branch
+     * ==========================================
+     */
+    if (
+        randomFloat()
+        < specularProbability
+    )
+    {
+        vec3 reflected =
+        reflect(
+                normalize(
+                        rayIn.direction
+                ),
+                rec.normal
+        );
+
+        /*
+         * TEMPORARY roughness approximation.
+         *
+         * Proper glTF rendering should eventually
+         * replace this with GGX VNDF sampling.
+         */
+        float spread =
+        roughness * roughness;
+
+        vec3 direction =
+        normalize(
+                reflected
+                + spread
+                * randomUnitVector()
+        );
+
+        if (
+            dot(
+                    direction,
+                    rec.normal
+            ) <= 0.0
+        )
+        {
+            return false;
+        }
+
+        scattered =
+        Ray(
+                rec.p,
+                direction
+        );
+
+        attenuation =
+        specularWeight
+        / specularProbability;
+
+        return true;
+    }
+
+    /*
+     * ==========================================
+     * Diffuse branch
+     * ==========================================
+     */
+
+    vec3 scatterDirection =
+    rec.normal
+    + randomUnitVector();
+
+    if (
+        nearZero(
+                scatterDirection
+        )
+    )
+    {
+        scatterDirection =
+        rec.normal;
+    }
+
+    scattered =
+    Ray(
+            rec.p,
+            scatterDirection
+    );
+
+    attenuation =
+    diffuseWeight
+    / (1.0 - specularProbability);
+
+    return true;
+}
+
+
 bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out Ray scattered, Material material) {
     if (material.type == MATERIAL_LAMBERTIAN){
         return scatterLambertian(rayIn, rec, material, attenuation, scattered); }
@@ -361,6 +663,8 @@ bool scatterMaterial(in Ray rayIn, in HitRecord rec, out vec3 attenuation, out R
         return scatterMetal(rayIn, rec, material, attenuation, scattered); }
     else if (material.type == MATERIAL_DIELECTRIC) {
         return scatterDielectric(rayIn, rec, material, attenuation, scattered);
+    } else if (material.type == MATERIAL_PBR_METAL_ROUGH) {
+        return scatterPbrMetallicRoughness(rayIn, rec, material, attenuation, scattered);
     }
     return false;
 }

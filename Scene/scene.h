@@ -52,11 +52,11 @@ struct SceneMaterial {
     glm::vec4 baseColor{1.0f, 1.0f, 1.0f, 1.0f};
     float metallic = 0.0f;
     float roughness = 0.5f;
+    float transmission = 0.0;
+    float indexOfRefraction = 1.0f;
 
     glm::vec3 emission{0.0, 0.0, 0.0};
     float emissionStrength = 0.0;
-    float transmission = 0.0;
-    float indexOfRefraction = 1.0f;
 
 
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
@@ -140,20 +140,68 @@ public:
         MarkDirty();
         return id;
     }
-    MaterialId addMaterial(MaterialType type, const glm::vec3& albedo = glm::vec3(1.0f), float fuzz = 0.0f,float indexOfRefraction = 1.0f, const glm::vec3& emission = glm::vec3(0.0f),
-    float emissionStrength = 0.0f){
+    // MaterialId addMaterial(const SceneMaterial& material) {
+    //     const MaterialId id =
+    //         static_cast<MaterialId>(
+    //             m_Materials.size()
+    //         );
+    //
+    //     m_Materials.push_back(
+    //         material
+    //     );
+    //
+    //     return id;
+    // }
+
+    MaterialId addMaterial(const SceneMaterial& material) {
+        const MaterialId id =
+            static_cast<MaterialId>(
+                m_Materials.size()
+            );
+
+        m_Materials.push_back(
+            material
+        );
+
+        return id;
+    }
+
+    MaterialId addMaterial(MaterialType type, const glm::vec3& albedo, float fuzz = 0.0f, float indexOfRefraction = 1.5f,
+    const glm::vec3& emission = glm::vec3(0.0f), float emissionStrength = 0.0f) {
         SceneMaterial material;
         material.type = type;
-        material.albedo = albedo;
+        material.baseColor = glm::vec4(albedo, 1.0f);
         material.fuzz = fuzz;
         material.indexOfRefraction = indexOfRefraction;
         material.emission = emission;
         material.emissionStrength = emissionStrength;
-        const auto id = static_cast<MaterialId>(m_Materials.size());
-        m_Materials.push_back(material);
-        MarkDirty();
-        return id;
+
+        switch (type) {
+            case MaterialType::Lambertian: {
+                material.metallic = 0.0f;
+                material.roughness = 1.0f;
+                material.transmission = 0.0f;
+                break;
+            }
+            case MaterialType::Metal: {
+                material.metallic = 1.0f;
+                material.roughness = 0.0f;
+                material.transmission = 0.0f;
+                break;
+            }
+            case MaterialType::Dielectric: {
+                material.metallic = 0.0f;
+                material.roughness = 0.0f;
+                material.transmission = 1.0f;
+                break;
+            }
+            case MaterialType::PbrMetalRough: {
+                break;
+            }
+        }
+        return addMaterial(material);
     }
+
     SphereId addSphere(const glm::vec3& center, float radius, MaterialId material) {
         SceneSphere sphere;
         sphere.center = center;
