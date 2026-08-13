@@ -62,26 +62,21 @@ void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& sc
 
 void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     DrawMenu(scene, renderer);
-    const CameraState before = CaptureCameraState(m_Camera);
     if (m_ShowScenePanel) {
         DrawScenePanel(scene);
     }
-
     if (m_ShowViewport) {
         DrawViewport(renderer);
     } else {
         m_ViewportHovered = false;
         m_ViewportFocused = false;
     }
-
-    if (m_ViewportHovered && m_ViewportFocused) {
-        m_Input->Update(deltaTime);
-    }
-    const CameraState current = CaptureCameraState(m_Camera);
-    if (CameraStateChanged(m_PreviousCameraState, current)) {
+    m_Input->Update(deltaTime, m_ViewportHovered, m_ViewportFocused);
+    const CameraState currentCameraState = CaptureCameraState(m_Camera);
+    if (CameraStateChanged(m_PreviousCameraState, currentCameraState)) {
         renderer.ResetAccumulation();
     }
-    m_PreviousCameraState = current;
+    m_PreviousCameraState = currentCameraState;
 }
 
 void EditorLayer::BeginFrame() {
@@ -135,12 +130,13 @@ void EditorLayer::DrawScenePanel(Scene& scene) {
 
 void EditorLayer::DrawViewport(Renderer& renderer) {
     ImGui::Begin("Viewport", &m_ShowViewport);
-    m_ViewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
+    // m_ViewportHovered = ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows);
     m_ViewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
     const ImVec2 available = ImGui::GetContentRegionAvail();
     ImGui::Text("Viewport size: %.0f x %.0f", available.x, available.y);
      ImGui::Image(renderer.GetViewportTexture(), available,
           ImVec2(0.0f, 1.0f),ImVec2(1.0f, 0.0f));
+    m_ViewportHovered = ImGui::IsItemHovered();
     ImGui::End();
 }
 
