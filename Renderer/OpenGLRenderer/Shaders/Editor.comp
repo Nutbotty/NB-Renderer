@@ -3,6 +3,8 @@
 const int MATERIAL_LAMBERTIAN = 0;
 const int MATERIAL_METAL = 1;
 const int MATERIAL_DIELECTRIC = 2;
+const int MATERIAL_VOLUME = 3;
+const int MATERIAL_PBR_METAL_ROUGH = 4;
 const int PRIMITIVE_SPHERE   = 0;
 const int PRIMITIVE_QUAD     = 1;
 const int PRIMITIVE_TRI = 2;
@@ -21,10 +23,14 @@ const int MAX_DEPTH = 2;
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform image2D outputImage;
 struct PackedMaterial {
-    vec4 albedoFuzz;
-    vec4 optical;
+    vec4 baseColor;
+    // xyzw metal rough ior transmission
+    vec4 surface;
     vec4 emission;
     ivec4 metadata;
+
+    vec4 albedoFuzz;
+    vec4 optical;
 };
 struct Sphere {
     vec3 center;
@@ -144,11 +150,19 @@ uniform vec3 uSkyColor2;
 
 struct Material {
     int type;
+
     vec3 albedo;
-    float fuzz;
+    float opacity;
+
+    float metallic;
+    float roughness;
+    float refractionIndex;
+    float transmission;
+
     vec3 emission;
     float emissionStrength;
-    float refractionIndex;
+
+    float fuzz;
 };
 
 struct Ray {
@@ -173,11 +187,21 @@ Material loadMaterial(int index) {
     PackedMaterial packed = materialBuffer[index];
     Material material;
     material.type = packed.metadata.x;
-    material.albedo = packed.albedoFuzz.xyz;
-    material.fuzz = packed.albedoFuzz.w;
+
+    material.albedo = packed.baseColor.rgb;
+    material.opacity = packed.baseColor.a;
+
+    material.metallic = packed.surface.x;
+    material.roughness = packed.surface.y;
+    material.refractionIndex = packed.surface.z;
+    material.transmission = packed.surface.w;
+
     material.emission = packed.emission.xyz;
     material.emissionStrength = packed.emission.w;
-    material.refractionIndex = packed.optical.x;
+//    material.refractionIndex = packed.optical.x;
+
+    material.albedo = packed.albedoFuzz.xyz;
+    material.fuzz = packed.albedoFuzz.w;
     return material;
 }
 
