@@ -308,7 +308,7 @@ void viewport(const Scene& scene) {
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
-        input.Update(deltaTime);
+        // input.Update(deltaTime);
 
         const CameraState currentCameraState = CaptureCameraState(camera);
         const bool cameraChanged = CameraStateChanged(previousCameraState, currentCameraState);
