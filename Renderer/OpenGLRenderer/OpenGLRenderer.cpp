@@ -178,8 +178,11 @@ void OpenGLRenderer::SetCameraUniforms(const EditorCamera& camera) {
 void OpenGLRenderer::SetEnvironmentUniforms(const Scene &scene) {
     Shader& shader = *m_EditorCompShader;
     auto environment = scene.GetEnvironment();
+    shader.setBool("uUseHdri", environment.HDRI);
     shader.setFloat("uEnvironmentIntensity", environment.intensity);
     shader.setVec3("uEnvironmentRotation", glm::radians(environment.rotation));
+    shader.setVec3("uSkyColor1", environment.color1);
+    shader.setVec3("uSkyColor2", environment.color2);
 }
 
 void OpenGLRenderer::ResetAccumulation() {

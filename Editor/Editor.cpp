@@ -131,41 +131,26 @@ void EditorLayer::DrawScenePanel(Scene& scene) {
     ImGui::End();
 }
 
-void EditorLayer::DrawEnvironmentPanel(
-    Scene& scene,
-    Renderer& renderer
-)
-{
-    ImGui::Begin(
-        "Environment",
-        &m_ShowEnvironmentPanel
-    );
-
-    SceneEnvironment& environment =
-        scene.GetEnvironment();
-
+void EditorLayer::DrawEnvironmentPanel(Scene& scene, Renderer& renderer) {
+    ImGui::Begin("Environment", &m_ShowEnvironmentPanel);
+    SceneEnvironment& environment = scene.GetEnvironment();
     bool changed = false;
+    changed |= ImGui::Checkbox("Use HDRI", &environment.HDRI);
+    ImGui::Separator();
 
-    changed |=
-        ImGui::DragFloat(
-            "Intensity",
-            &environment.intensity,
-            0.01f,
-            0.0f,
-            100.0f,
-            "%.2f"
-        );
+    if (environment.HDRI) {
+        ImGui::TextUnformatted("HDRI Environment");
+        changed |= ImGui::DragFloat("Intensity", &environment.intensity,
+            0.01f, 0.0f, 100.0f, "%.2f");
+        changed |= ImGui::DragFloat3("Rotation", &environment.rotation.x,
+            0.5f, -360.0f,360.0f, "%.1f deg");
+    }
+    else {
+        ImGui::TextUnformatted("Procedural Sky");
 
-    changed |=
-        ImGui::DragFloat3(
-            "Rotation",
-            &environment.rotation.x,
-            0.5f,
-            -360.0f,
-            360.0f,
-            "%.1f deg"
-        );
-
+        changed |= ImGui::ColorEdit3("Horizon Color", &environment.color1.x);
+        changed |= ImGui::ColorEdit3("Sky Color", &environment.color2.x);
+    }
     if (changed) {
         renderer.ResetAccumulation();
     }

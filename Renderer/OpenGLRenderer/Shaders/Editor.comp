@@ -17,7 +17,6 @@ const float MAX_RAY_DISTANCE = 1e30;
 const int SAMPLES_PER_PIXEL = 5;
 const int SAMPLES_PER_DISPATCH = 1;
 const int MAX_DEPTH = 2;
-const bool HDRI = true;
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform image2D outputImage;
@@ -136,8 +135,11 @@ uniform float uCameraDefocusAngle;
 uniform uint uFrameIndex;
 uniform sampler2D uEnvironmentMap;
 
+uniform bool uUseHdri;
 uniform float uEnvironmentIntensity;
 uniform vec3 uEnvironmentRotation;
+uniform vec3 uSkyColor1;
+uniform vec3 uSkyColor2;
 
 
 struct Material {
@@ -693,12 +695,12 @@ vec3 sampleEnvironment(vec3 direction) {
     return radiance * uEnvironmentIntensity;
 }
 vec3 skyBoxColor(Ray r) {
-    if (HDRI) {
+    if (uUseHdri) {
         return sampleEnvironment(r.direction);
     }
     vec3 unitDirection = normalize(r.direction);
     float blend = 0.5 * (unitDirection.y + 1.0);
-    return mix( vec3(1.0, 1.0, 1.0), vec3(0.5, 0.7, 1.0), blend);
+    return mix( uSkyColor1, uSkyColor2, blend);
 }
 vec3 rayColor(Ray r) {
     Ray currentRay = r;
