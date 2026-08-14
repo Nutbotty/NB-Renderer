@@ -200,8 +200,8 @@ Material loadMaterial(int index) {
     material.emissionStrength = packed.emission.w;
 //    material.refractionIndex = packed.optical.x;
 
-    material.albedo = packed.albedoFuzz.xyz;
-    material.fuzz = packed.albedoFuzz.w;
+//    material.albedo = packed.albedoFuzz.xyz;
+//    material.fuzz = packed.albedoFuzz.w;
     return material;
 }
 
