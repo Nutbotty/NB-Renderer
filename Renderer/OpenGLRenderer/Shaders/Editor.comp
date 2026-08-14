@@ -383,8 +383,10 @@ bool scatterPbrMetallicRoughness(Ray rayIn, HitRecord rec, Material material, ou
         vec3 direction;
         if (cannotRefract || reflectance(cosTheta, ri) > randomFloat()) {
             direction = reflect(unitDirection, rec.normal);
+            attenuation = vec3(1.0);
         } else {
             direction = refract(unitDirection, rec.normal, ri);
+            attenuation = material.albedo;
         }
         scattered = Ray(offsetRayOrigin(rec, direction), direction);
         return true;
