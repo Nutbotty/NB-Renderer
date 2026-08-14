@@ -12,6 +12,7 @@
 #include "../external/glm/glm/glm.hpp"
 
 using MaterialId = std::uint32_t;
+constexpr MaterialId InvalidMaterialId = std::numeric_limits<MaterialId>::max();
 using SphereId = std::uint32_t;
 using QuadId = std::uint32_t;
 using TriId = std::uint32_t;
@@ -19,6 +20,7 @@ using InstanceId = std::uint32_t;
 using MeshId = std::uint32_t;
 using MeshInstanceId = std::uint32_t;
 using TextureId = std::uint32_t;
+
 
 
 enum class SceneTextureType {
@@ -118,6 +120,7 @@ struct SceneMesh {
 struct SceneMeshInstance {
     MeshId mesh = 0;
     glm::mat4 objectToWorld{1.0f};
+    MaterialId materialOverride = InvalidMaterialId;
 };
 
 //camera
@@ -300,14 +303,18 @@ public:
     [[nodiscard]] const std::vector<SceneMesh>& GetMeshes() const {
         return m_Meshes;
     }
-    [[nodiscard]]
-    const std::vector<SceneMeshInstance>& GetMeshInstances() const {
+
+    std::vector<SceneMeshInstance>& GetMeshInstances() {
+        return m_MeshInstances;
+    }    
+    [[nodiscard]]const std::vector<SceneMeshInstance>& GetMeshInstances() const {
         return m_MeshInstances;
     }
+
+
     [[nodiscard]]const SceneEnvironment& GetEnvironment() const {
         return m_Environment;
     }
-
     SceneEnvironment& GetEnvironment() {
         return m_Environment;
     }
