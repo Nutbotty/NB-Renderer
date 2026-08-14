@@ -63,7 +63,7 @@ void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& sc
 void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     DrawMenu(scene, renderer);
     if (m_ShowScenePanel) {
-        DrawScenePanel(scene);
+        DrawScenePanel(scene, renderer);
     }
     if (m_ShowViewport) {
         DrawViewport(renderer);
@@ -122,12 +122,54 @@ void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
     ImGui::EndMainMenuBar();
 }
 
-void EditorLayer::DrawScenePanel(Scene& scene) {
+void EditorLayer::DrawScenePanel(Scene& scene, Renderer& renderer) {
     ImGui::Begin("Scene", &m_ShowScenePanel);
+    auto& materials = scene.GetMaterials();
     ImGui::Text("Materials: %zu", scene.GetMaterials().size());
     ImGui::Text("Spheres: %zu", scene.GetSpheres().size());
     ImGui::Text("Meshes: %zu", scene.GetMeshes().size());
     ImGui::Text("Mesh Instances: %zu", scene.GetMeshInstances().size() );
+    ImGui::Separator();
+
+    //Materials
+    if (!materials.empty()) {
+        if (m_SelectedMaterial>= materials.size()) {
+            m_SelectedMaterial = 0;
+        }
+        std::string preview = "Material " + std::to_string(m_SelectedMaterial);
+        if (ImGui::BeginCombo("Material", preview.c_str())) {
+            for (std::size_t i = 0; i < materials.size(); ++i) {
+                const bool selected = i == m_SelectedMaterial;
+                std::string label = "Material " + std::to_string(i);
+                if (ImGui::Selectable(label.c_str(),selected)) {
+                    m_SelectedMaterial = i;
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::Separator();
+
+        //Mat editor
+        SceneMaterial& material = materials[m_SelectedMaterial];
+
+        bool changed = false;
+        changed |= ImGui::ColorEdit3("Base Color", &material.baseColor.x);
+        changed |= ImGui::SliderFloat("Metallic", &material.metallic, 0.0f, 1.0f);
+        changed |=ImGui::SliderFloat("Roughness", &material.roughness, 0.0f, 1.0f );
+        changed |= ImGui::DragFloat("IOR", &material.indexOfRefraction,0.01f,1.0f, 3.0f);
+        changed |= ImGui::SliderFloat("Transmission", &material.transmission, 0.0f, 1.0f);
+        changed |= ImGui::ColorEdit3("Emission", &material.emission.x);
+        changed |= ImGui::DragFloat("Emission Strength", &material.emissionStrength, 0.1f, 0.0f, 100.0f);
+        if (material.type == MaterialType::Metal) {
+            changed |= ImGui::SliderFloat("Fuzz", &material.fuzz, 0.0f, 1.0f);
+        }
+        if (changed) {
+            renderer.UpdateMaterials(scene);
+        }
+    }
     ImGui::End();
 }
 

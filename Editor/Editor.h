@@ -40,7 +40,7 @@ public:
 
 private:
     void DrawMenu(Scene& scene, Renderer& renderer);
-    void DrawScenePanel(Scene& scene);
+    void DrawScenePanel(Scene& scene, Renderer& renderer);
     void DrawEnvironmentPanel(Scene& scene, Renderer& renderer);
     void DrawViewport(Renderer& renderer);
 
@@ -51,6 +51,7 @@ private:
     std::unique_ptr<ImGuiBackend> m_ImGuiBackend;
     bool m_Initialized = false;
     bool m_ShowScenePanel = true;
+    std::size_t m_SelectedMaterial = 0;
     bool m_ShowEnvironmentPanel = true;
     bool m_ViewportHovered = false;
     bool m_ViewportFocused = false;
