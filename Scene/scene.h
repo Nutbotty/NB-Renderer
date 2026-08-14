@@ -285,9 +285,14 @@ public:
     [[nodiscard]] const std::vector<SceneTexture>& GetTextures() const {
         return m_Textures;
     }
+
+    std::vector<SceneMaterial>& GetMaterials() {
+        return m_Materials;
+    }
     [[nodiscard]] const std::vector<SceneMaterial>& GetMaterials() const {
         return m_Materials;
     }
+
     [[nodiscard]] const std::vector<SceneSphere>& GetSpheres() const {
         return m_Spheres;
     }
@@ -306,7 +311,7 @@ public:
 
     std::vector<SceneMeshInstance>& GetMeshInstances() {
         return m_MeshInstances;
-    }    
+    }
     [[nodiscard]]const std::vector<SceneMeshInstance>& GetMeshInstances() const {
         return m_MeshInstances;
     }

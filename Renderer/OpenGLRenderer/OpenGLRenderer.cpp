@@ -29,18 +29,60 @@ namespace {
     constexpr std::uint32_t ComputeLocalSizeX = 16;
     constexpr std::uint32_t ComputeLocalSizeY = 16;
 
-    std::vector<GpuMaterial> BuildGpuMaterials(const Scene& scene) {
+    std::vector<GpuMaterial>
+BuildGpuMaterials(
+    const Scene& scene
+)
+    {
         std::vector<GpuMaterial> result;
-        result.reserve(scene.GetMaterials().size());
 
-        for (const SceneMaterial& material :scene.GetMaterials()) {
-            GpuMaterial gpuMaterial;
-            gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
-            gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
-            gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
-            gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
-            result.push_back(gpuMaterial);
+        const auto& materials =
+            scene.GetMaterials();
+
+        result.reserve(
+            materials.size()
+        );
+
+        for (
+            const SceneMaterial& material :
+            materials
+        )
+        {
+            GpuMaterial gpu{};
+
+            gpu.BaseColor =
+                material.baseColor;
+
+            gpu.Surface =
+                glm::vec4(
+                    material.metallic,
+                    material.roughness,
+                    material.indexOfRefraction,
+                    material.transmission
+                );
+
+            gpu.Emission =
+                glm::vec4(
+                    material.emission,
+                    material.emissionStrength
+                );
+
+            gpu.Metadata =
+                glm::ivec4(
+                    static_cast<int>(
+                        material.type
+                    ),
+                    0,
+                    0,
+                    0
+                );
+
+
+            result.push_back(
+                gpu
+            );
         }
+
         return result;
     }
 }
@@ -102,11 +144,39 @@ void OpenGLRenderer::UploadEnvironment(const Scene& scene) {
     m_EnvironmentTexture = CreateHdrTexture(textures[environment.texture]);
 }
 
-void OpenGLRenderer::UpdateMaterials(const Scene& scene) {
-    const auto materials = BuildGpuMaterials(scene);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_MaterialBuffer);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, materials.size() * sizeof(GpuMaterial), materials.data());
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+void OpenGLRenderer::UpdateMaterials(
+    const Scene& scene
+)
+{
+    const std::vector<GpuMaterial> materials =
+        BuildGpuMaterials(scene);
+
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        m_MaterialBuffer
+    );
+
+    glBufferData(
+        GL_SHADER_STORAGE_BUFFER,
+        static_cast<GLsizeiptr>(
+            materials.size()
+            * sizeof(GpuMaterial)
+        ),
+        materials.data(),
+        GL_DYNAMIC_DRAW
+    );
+
+    glBindBufferBase(
+        GL_SHADER_STORAGE_BUFFER,
+        MaterialBufferBinding,
+        m_MaterialBuffer
+    );
+
+    glBindBuffer(
+        GL_SHADER_STORAGE_BUFFER,
+        0
+    );
+
     ResetAccumulation();
 }
 
