@@ -102,6 +102,14 @@ void OpenGLRenderer::UploadEnvironment(const Scene& scene) {
     m_EnvironmentTexture = CreateHdrTexture(textures[environment.texture]);
 }
 
+void OpenGLRenderer::UpdateMaterials(const Scene& scene) {
+    const auto materials = BuildGpuMaterials(scene);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_MaterialBuffer);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, materials.size() * sizeof(GpuMaterial), materials.data());
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    ResetAccumulation();
+}
+
 void OpenGLRenderer::CreateOutputTexture(std::uint32_t width, std::uint32_t height) {
     DestroyOutputTexture();
     m_RenderWidth = width;

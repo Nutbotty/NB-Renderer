@@ -22,6 +22,7 @@ public:
     void Initialize(Window& window) override;
     void Shutdown() override;
     void SetScene(const Scene& scene) override;
+    void UpdateMaterials(const Scene &scene) override;
     void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) override;
     void ResetAccumulation() override;
 

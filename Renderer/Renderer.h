@@ -34,6 +34,7 @@ public:
     virtual void Initialize(Window& window) = 0;
     virtual void Shutdown() = 0;
     virtual void SetScene(const Scene& scene) = 0;
+    virtual void UpdateMaterials(const Scene& scene) = 0;
     virtual void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) = 0;
     virtual void Present() = 0;
     virtual void Resize(std::uint32_t width, std::uint32_t height) = 0;
