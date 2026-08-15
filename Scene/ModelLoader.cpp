@@ -27,7 +27,7 @@ namespace
     fastgltf::Options::LoadExternalImages
     |
     fastgltf::Options::GenerateMeshIndices;
-    
+
     glm::vec3 ToGlmVec3(
         const fastgltf::math::nvec3& value
     )
@@ -93,7 +93,7 @@ namespace
     {
         return scene.addMaterial(
             MaterialType::Lambertian,
-            glm::vec3(0.1f),
+            glm::vec3(0.f),
             0.0f,
             1.0f
         );
