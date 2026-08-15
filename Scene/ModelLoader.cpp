@@ -15,6 +15,7 @@
 #include <fastgltf/types.hpp>
 #include <fastgltf/tools.hpp>
 #include <fastgltf/glm_element_traits.hpp>
+#include <../stb_image.h>
 
 
 // This file was created with the assitance of generative AI and is not my own work
@@ -87,6 +88,197 @@ namespace
         return result;
     }
 
+
+    std::vector<TextureId> LoadImages(const fastgltf::Asset& asset, Scene& scene, const std::filesystem::path& basePath) {
+    std::vector<TextureId> imageMap;
+    imageMap.reserve(asset.images.size());
+
+    for (const fastgltf::Image& image : asset.images) {
+        SceneTexture sceneTexture;
+        sceneTexture.type = SceneTextureType::Image2D;
+
+        bool loaded = false;
+
+        auto loadFromMemory =
+            [&](
+                const unsigned char* bytes,
+                std::size_t byteCount
+            )
+        {
+            int width = 0;
+            int height = 0;
+            int channels = 0;
+
+            unsigned char* pixels =
+                stbi_load_from_memory(
+                    bytes,
+                    static_cast<int>(
+                        byteCount
+                    ),
+                    &width,
+                    &height,
+                    &channels,
+                    STBI_rgb_alpha
+                );
+
+            if (!pixels)
+            {
+                return;
+            }
+
+            sceneTexture.width =
+                width;
+
+            sceneTexture.height =
+                height;
+
+            sceneTexture.channels =
+                4;
+
+            const std::size_t size =
+                static_cast<std::size_t>(
+                    width
+                )
+                *
+                static_cast<std::size_t>(
+                    height
+                )
+                * 4;
+
+            sceneTexture.pixels.assign(
+                pixels,
+                pixels + size
+            );
+
+            stbi_image_free(
+                pixels
+            );
+
+            loaded = true;
+        };
+
+        std::visit(
+            fastgltf::visitor{
+                [&](const fastgltf::sources::URI& source)
+                {
+                    std::string relativePath(
+                        source.uri.path().begin(),
+                        source.uri.path().end()
+                    );
+
+                    const std::filesystem::path imagePath =
+                        basePath
+                        / relativePath;
+
+                    int width = 0;
+                    int height = 0;
+                    int channels = 0;
+
+                    unsigned char* pixels =
+                        stbi_load(
+                            imagePath.string().c_str(),
+                            &width,
+                            &height,
+                            &channels,
+                            STBI_rgb_alpha
+                        );
+
+                    if (!pixels)
+                    {
+                        return;
+                    }
+
+                    sceneTexture.width =
+                        width;
+
+                    sceneTexture.height =
+                        height;
+
+                    sceneTexture.channels =
+                        4;
+
+                    const std::size_t size =
+                        static_cast<std::size_t>(
+                            width
+                        )
+                        *
+                        static_cast<std::size_t>(
+                            height
+                        )
+                        * 4;
+
+                    sceneTexture.pixels.assign(
+                        pixels,
+                        pixels + size
+                    );
+
+                    stbi_image_free(
+                        pixels
+                    );
+
+                    loaded = true;
+                },
+
+                [&](const fastgltf::sources::Array& source)
+                {
+                    loadFromMemory(
+                        reinterpret_cast<
+                            const unsigned char*
+                        >(source.bytes.data()), source.bytes.size());
+                },
+                [&](const fastgltf::sources::BufferView& source) {
+                    const auto& view = asset.bufferViews[source.bufferViewIndex];
+                    const auto& buffer =
+                        asset.buffers[view.bufferIndex];
+                    std::visit(fastgltf::visitor{
+                            [&](const fastgltf::sources::Array& data) {
+                                const auto* begin = reinterpret_cast<const unsigned char*>
+                                (data.bytes.data()) + view.byteOffset;
+                                loadFromMemory(begin, view.byteLength);
+                            },
+                            [](const auto&)
+                            {}}, buffer.data);
+                },
+                [](const auto&){}},image.data);
+        if (!loaded){
+            throw std::runtime_error("Failed to decode glTF image");
+        }
+        imageMap.push_back(scene.addTexture(std::move(sceneTexture)));
+    }
+    return imageMap;
+}
+    TextureId ResolveTexture(const fastgltf::Asset& asset, const std::vector<TextureId>& imageMap, std::size_t textureIndex) {
+        if (textureIndex >= asset.textures.size()) {
+            return InvalidTextureId;
+        }
+
+        const fastgltf::Texture& texture =
+            asset.textures[
+                textureIndex
+            ];
+
+        if (!texture.imageIndex.has_value())
+        {
+            return InvalidTextureId;
+        }
+
+        const std::size_t imageIndex =
+            texture.imageIndex.value();
+
+        if (
+            imageIndex
+            >= imageMap.size()
+        )
+        {
+            return InvalidTextureId;
+        }
+
+        return imageMap[
+            imageIndex
+        ];
+    }
+
+
     MaterialId LoadDefaultMaterial(
         Scene& scene
     )
@@ -99,156 +291,63 @@ namespace
         );
     }
 
-    std::vector<MaterialId> LoadMaterials(
-        const fastgltf::Asset& asset,
-        Scene& scene
-    )
-    {
-
+    std::vector<MaterialId> LoadMaterials(const fastgltf::Asset& asset, const std::vector<TextureId>& imageMap, Scene& scene) {
         std::vector<MaterialId> materialMap;
-
-        materialMap.reserve(
-            asset.materials.size()
-        );
-
-        for (
-            const fastgltf::Material& gltfMaterial :
-            asset.materials
-        )
-        {
+        materialMap.reserve(asset.materials.size());
+        for (const fastgltf::Material& gltfMaterial : asset.materials) {
             std::size_t materialIndex = 0;
 
-            for (
-                const fastgltf::Material& gltfMaterial :
-                asset.materials
-            ) {
-                const auto& pbr =
-                    gltfMaterial.pbrData;
-
-                std::cerr
-                    << "Material "
-                    << materialIndex
-                    << ":\n";
-
-                std::cerr
-                    << "  baseColorFactor = "
-                    << pbr.baseColorFactor[0] << ", "
-                    << pbr.baseColorFactor[1] << ", "
-                    << pbr.baseColorFactor[2] << ", "
-                    << pbr.baseColorFactor[3] << '\n';
-
-                std::cerr
-                    << "  metallicFactor = "
-                    << pbr.metallicFactor
-                    << '\n';
-
-                std::cerr
-                    << "  roughnessFactor = "
-                    << pbr.roughnessFactor
-                    << '\n';
-
-                if (pbr.baseColorTexture.has_value())
-                {
-                    std::cerr
-                        << "  baseColorTexture = "
-                        << pbr.baseColorTexture
-                               ->textureIndex
-                        << '\n';
+            for (const fastgltf::Material& gltfMaterial : asset.materials) {
+                const auto& pbr = gltfMaterial.pbrData;
+                std::cerr << "Material " << materialIndex << ":\n";
+                std::cerr << "  baseColorFactor = " << pbr.baseColorFactor[0] << ", "
+                    << pbr.baseColorFactor[1] << ", " << pbr.baseColorFactor[2] << ", " << pbr.baseColorFactor[3] << '\n';
+                std::cerr << "  metallicFactor = " << pbr.metallicFactor << '\n';
+                std::cerr << "  roughnessFactor = " << pbr.roughnessFactor << '\n';
+                if (pbr.baseColorTexture.has_value()) {
+                    std::cerr << "  baseColorTexture = "
+                        << pbr.baseColorTexture->textureIndex<< '\n';
+                } else {
+                    std::cerr << "  baseColorTexture = NONE\n";
                 }
-                else
-                {
-                    std::cerr
-                        << "  baseColorTexture = NONE\n";
+                if (pbr.metallicRoughnessTexture.has_value()) {
+                    std::cerr << "  metallicRoughnessTexture = "
+                        << pbr.metallicRoughnessTexture->textureIndex << '\n';
+                } else {
+                    std::cerr << "  metallicRoughnessTexture = NONE\n";
                 }
-
-                if (
-                    pbr.metallicRoughnessTexture
-                        .has_value()
-                )
-                {
-                    std::cerr
-                        << "  metallicRoughnessTexture = "
-                        << pbr.metallicRoughnessTexture
-                               ->textureIndex
-                        << '\n';
-                }
-                else
-                {
-                    std::cerr
-                        << "  metallicRoughnessTexture = NONE\n";
-                }
-
                 ++materialIndex;
             }
-            const auto& pbr =
-                gltfMaterial.pbrData;
+            const auto& pbr = gltfMaterial.pbrData;
 
             SceneMaterial material;
-
-            material.type =
-                MaterialType::PbrMetalRough;
-
-            material.baseColor =
-                ToGlmVec4(
-                    pbr.baseColorFactor
-                );
-
-            material.metallic =
-                std::clamp(
-                    static_cast<float>(
-                        pbr.metallicFactor
-                    ),
-                    0.0f,
-                    1.0f
-                );
-
-            material.roughness =
-                std::clamp(
-                    static_cast<float>(
-                        pbr.roughnessFactor
-                    ),
-                    0.0f,
-                    1.0f
-                );
-
-            material.emission =
-                ToGlmVec3(
-                    gltfMaterial.emissiveFactor
-                );
-
-            material.emissionStrength =
-                static_cast<float>(
-                    gltfMaterial.emissiveStrength
-                );
-
-            material.indexOfRefraction =
-                static_cast<float>(
-                    gltfMaterial.ior
-                );
-
-            if (gltfMaterial.transmission)
-            {
-                material.transmission =
-                    std::clamp(
-                        static_cast<float>(
-                            gltfMaterial.transmission
-                                ->transmissionFactor
-                        ),
-                        0.0f,
-                        1.0f
-                    );
+            material.type = MaterialType::PbrMetalRough;
+            material.baseColor = ToGlmVec4(pbr.baseColorFactor);
+            material.metallic = std::clamp(static_cast<float>(pbr.metallicFactor), 0.0f, 1.0f);
+            material.roughness = std::clamp(static_cast<float>(pbr.roughnessFactor),0.0f, 1.0f);
+            material.emission = ToGlmVec3(gltfMaterial.emissiveFactor);
+            material.emissionStrength = static_cast<float>(gltfMaterial.emissiveStrength);
+            material.indexOfRefraction = static_cast<float>(gltfMaterial.ior);
+            if (gltfMaterial.transmission) {
+                material.transmission = std::clamp(static_cast<float>(
+                            gltfMaterial.transmission->transmissionFactor), 0.0f, 1.0f);
             }
-
-            const MaterialId materialId =
-                scene.addMaterial(
-                    material
-                );
-
-            materialMap.push_back(
-                materialId
-            );
+            if (pbr.baseColorTexture.has_value()) {
+                const auto& texture = *pbr.baseColorTexture;
+                material.baseColorTexture = ResolveTexture(asset, imageMap, texture.textureIndex);
+                material.baseColorTexCoord = static_cast<std::uint32_t>(texture.texCoordIndex);
+            }
+            if (pbr.metallicRoughnessTexture.has_value()) {
+                const auto& texture = *pbr.metallicRoughnessTexture;
+                material.metallicRoughnessTexture = ResolveTexture(asset, imageMap, texture.textureIndex);
+                material.metallicRoughnessTexCoord = static_cast<std::uint32_t>(texture.texCoordIndex);
+            }
+            if (material.baseColorTexCoord != 0 || material.metallicRoughnessTexCoord != 0) {
+                std::cerr << "Warning: only TEXCOORD_0 " "is currently supported\n";
+            }
+            const MaterialId materialId = scene.addMaterial(material);
+            materialMap.push_back(materialId);
         }
-
         return materialMap;
     }
 
@@ -714,16 +813,11 @@ bool GltfLoader::Load(
         supportedExtensions
     );
 
-    constexpr auto options =
-        fastgltf::Options::LoadExternalBuffers
+    constexpr auto options = fastgltf::Options::LoadExternalBuffers
+        | fastgltf::Options::GenerateMeshIndices
         | fastgltf::Options::GenerateMeshIndices;
 
-    auto loadedAsset =
-        parser.loadGltf(
-            data.get(),
-            path.parent_path(),
-            options
-        );
+    auto loadedAsset = parser.loadGltf(data.get(), path.parent_path(), options);
 
     if (
         loadedAsset.error()
@@ -763,14 +857,9 @@ bool GltfLoader::Load(
     /*
      * A glTF primitive may omit its material.
      */
-    const MaterialId defaultMaterial =
-        LoadDefaultMaterial(scene);
-
-    const std::vector<MaterialId> materialMap =
-        LoadMaterials(
-            asset,
-            scene
-        );
+    const MaterialId defaultMaterial = LoadDefaultMaterial(scene);
+    const auto imageMap = LoadImages(asset, scene, path.parent_path());
+    const auto materialMap = LoadMaterials(asset, imageMap, scene);
 
     /*
      * Maps glTF mesh indices to your Scene MeshIds.
@@ -800,112 +889,50 @@ bool GltfLoader::Load(
                 defaultMaterial,
                 scene,
                 sceneMesh
-            )
-        )
-        {
-            std::cerr
-                << "Failed to load glTF mesh "
-                << meshIndex
-                << '\n';
-
+            )) {
+            std::cerr << "Failed to load glTF mesh " << meshIndex << '\n';
             return false;
         }
-
-        meshMap[meshIndex] =
-            sceneMesh;
+        meshMap[meshIndex] = sceneMesh;
     }
 
     std::size_t instanceCount = 0;
-
-    if (!asset.scenes.empty())
-    {
-        const std::size_t sceneIndex =
-            asset.defaultScene.value_or(0);
-
-        if (sceneIndex >= asset.scenes.size())
-        {
-            std::cerr
-                << "glTF default scene index is invalid\n";
-
+    if (!asset.scenes.empty()) {
+        const std::size_t sceneIndex = asset.defaultScene.value_or(0);
+        if (sceneIndex >= asset.scenes.size()) {
+            std::cerr << "glTF default scene index is invalid\n";
             return false;
         }
-
         /*
          * iterateSceneNodes recursively walks the node hierarchy
          * and gives us each node's accumulated world transform.
          */
-        fastgltf::iterateSceneNodes(
-            asset,
-            sceneIndex,
-            fastgltf::math::fmat4x4(1.0f),
-            [&](
-                fastgltf::Node& node,
-                const fastgltf::math::fmat4x4&
-                    nodeTransform
-            )
-            {
-                if (!node.meshIndex.has_value())
-                {
+        fastgltf::iterateSceneNodes(asset, sceneIndex, fastgltf::math::fmat4x4(1.0f),
+            [&](fastgltf::Node& node, const fastgltf::math::fmat4x4& nodeTransform) {
+                if (!node.meshIndex.has_value()) {
                     return;
                 }
-
-                const std::size_t gltfMeshIndex =
-                    node.meshIndex.value();
-
-                if (gltfMeshIndex >= meshMap.size())
-                {
-                    std::cerr
-                        << "Node references an invalid "
-                           "mesh index\n";
-
+                const std::size_t gltfMeshIndex = node.meshIndex.value();
+                if (gltfMeshIndex >= meshMap.size()) {
+                    std::cerr << "Node references an invalid " "mesh index\n";
                     return;
                 }
-
-                const glm::mat4 objectToWorld =
-                    rootTransform
-                    * ToGlmMatrix(
-                        nodeTransform
-                    );
-
-                scene.addMeshInstance(
-                    meshMap[gltfMeshIndex],
-                    objectToWorld
-                );
-
+                const glm::mat4 objectToWorld = rootTransform * ToGlmMatrix(nodeTransform);
+                scene.addMeshInstance(meshMap[gltfMeshIndex], objectToWorld);
                 ++instanceCount;
-            }
-        );
-    }
-    else
-    {
+            });
+    } else {
         /*
          * This fallback is not a complete replacement for a
          * glTF scene hierarchy, but lets simple scene-less assets
          * remain loadable.
          */
-        std::cerr
-            << "glTF has no scene; creating one identity "
-               "instance per mesh\n";
-
-        for (const MeshId mesh : meshMap)
-        {
-            scene.addMeshInstance(
-                mesh,
-                rootTransform
-            );
-
+        std::cerr << "glTF has no scene; creating one identity " "instance per mesh\n";
+        for (const MeshId mesh : meshMap) {
+            scene.addMeshInstance(mesh, rootTransform);
             ++instanceCount;
         }
     }
-
-    std::cerr
-        << "Imported model:\n"
-        << "  Scene meshes:    "
-        << meshMap.size()
-        << '\n'
-        << "  Mesh instances:  "
-        << instanceCount
-        << '\n';
-
+    std::cerr << "Imported model:\n" << "  Scene meshes:    " << meshMap.size() << '\n' << "  Mesh instances:  " << instanceCount << '\n';
     return true;
 }
