@@ -12,7 +12,6 @@
 #include "../external/glm/glm/glm.hpp"
 
 using MaterialId = std::uint32_t;
-constexpr MaterialId InvalidMaterialId = std::numeric_limits<MaterialId>::max();
 using SphereId = std::uint32_t;
 using QuadId = std::uint32_t;
 using TriId = std::uint32_t;
@@ -21,6 +20,8 @@ using MeshId = std::uint32_t;
 using MeshInstanceId = std::uint32_t;
 using TextureId = std::uint32_t;
 
+constexpr MaterialId InvalidMaterialId = std::numeric_limits<MaterialId>::max();
+constexpr TextureId InvalidTextureId = std::numeric_limits<TextureId>::max();
 
 
 enum class SceneTextureType {
@@ -39,6 +40,7 @@ struct SceneTexture {
     int width = 0;
     int height = 0;
     int channels = 0;
+    std::vector<std::uint8_t> pixels;
     std::vector<float> hdrPixels;
 };
 struct SceneEnvironment {
@@ -54,12 +56,16 @@ struct SceneMaterial {
     glm::vec4 baseColor{1.0f, 1.0f, 1.0f, 1.0f};
     float metallic = 0.0f;
     float roughness = 0.5f;
+    float indexOfRefraction = 1.5f;
     float transmission = 0.0;
-    float indexOfRefraction = 1.0f;
 
     glm::vec3 emission{0.0, 0.0, 0.0};
     float emissionStrength = 0.0;
 
+    TextureId baseColorTexture = InvalidTextureId;
+    TextureId metallicRoughnessTexture = InvalidTextureId;
+    std::uint32_t baseColorTexCoord = 0;
+    std::uint32_t metallicRoughnessTexCoord = 0;
 
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
     float fuzz = 0.0f;
@@ -143,18 +149,6 @@ public:
         MarkDirty();
         return id;
     }
-    // MaterialId addMaterial(const SceneMaterial& material) {
-    //     const MaterialId id =
-    //         static_cast<MaterialId>(
-    //             m_Materials.size()
-    //         );
-    //
-    //     m_Materials.push_back(
-    //         material
-    //     );
-    //
-    //     return id;
-    // }
 
     MaterialId addMaterial(const SceneMaterial& material) {
         const MaterialId id =
@@ -168,7 +162,6 @@ public:
 
         return id;
     }
-
     MaterialId addMaterial(MaterialType type, const glm::vec3& albedo, float fuzz = 0.0f, float indexOfRefraction = 1.5f,
     const glm::vec3& emission = glm::vec3(0.0f), float emissionStrength = 0.0f) {
         SceneMaterial material;
