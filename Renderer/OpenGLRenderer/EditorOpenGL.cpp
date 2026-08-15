@@ -56,8 +56,8 @@ namespace {
                 material.baseColorTexture == InvalidTextureId ? -1 : static_cast<int>(material.baseColorTexture),
                 material.metallicRoughnessTexture== InvalidTextureId ? -1 : static_cast<int>(material.metallicRoughnessTexture), -1, -1);
 
-            gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
-            gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
+            // gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
+            // gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);
             result.push_back(gpuMaterial);
         }
         return result;

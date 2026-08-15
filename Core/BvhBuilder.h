@@ -32,11 +32,6 @@ struct alignas(16) GpuMaterial {
     glm::ivec4 Metadata{0};
     // x = basecolor y = metalrough z = normal, w = emissive (-1 none)
     glm::ivec4 TextureIndices{-1};
-
-    glm::vec4 AlbedoFuzz{0.0f};
-    // x = ior
-    glm::vec4 Optical{0.0f};
-
 };
 
 struct alignas(16) GpuSphere {
