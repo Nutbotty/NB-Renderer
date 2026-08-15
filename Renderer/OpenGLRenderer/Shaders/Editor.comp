@@ -29,9 +29,6 @@ struct PackedMaterial {
     vec4 emission;
     ivec4 metadata;
     ivec4 textureIndices;
-
-    vec4 albedoFuzz;
-    vec4 optical;
 };
 struct Sphere {
     vec3 center;
@@ -142,6 +139,8 @@ uniform float uCameraDefocusAngle;
 
 uniform uint uFrameIndex;
 uniform sampler2D uEnvironmentMap;
+uniform sampler2DArray uBaseColorTextures;
+uniform sampler2DArray uMetalRoughTextures;
 
 uniform bool uUseHdri;
 uniform float uEnvironmentIntensity;
@@ -206,10 +205,6 @@ Material loadMaterial(int index) {
 
     material.baseColorTexture = packed.textureIndices.x;
     material.metallicRoughnessTexture = packed.textureIndices.y;
-//    material.refractionIndex = packed.optical.x;
-
-//    material.albedo = packed.albedoFuzz.xyz;
-//    material.fuzz = packed.albedoFuzz.w;
     return material;
 }
 
@@ -376,8 +371,24 @@ vec3 offsetRayOrigin(HitRecord rec, vec3 direction) {
     return rec.p + rec.normal * side * RAY_EPSILON;
 }
 bool scatterPbrMetallicRoughness(Ray rayIn, HitRecord rec, Material material, out vec3 attenuation, out Ray scattered) {
-    float metallic = clamp(material.metallic, 0.0, 1.0);
-    float roughness = clamp(material.roughness, 0.01, 1.0);
+    vec3 baseColor = material.albedo;
+    float opacity = material.opacity;
+    float metallic = material.metallic;
+    float roughness = material.roughness;
+    if (material.baseColorTexture >= 0) {
+        vec4 texel = textureLod(uBaseColorTextures, vec3(rec.uv, float(material.baseColorTexture)), 0.0);
+        baseColor *= texel.rgb;
+        opacity *= texel.a;
+    }
+    if (material.metallicRoughnessTexture >= 0) {
+        vec4 mr = textureLod(uMetalRoughTextures, vec3(rec.uv, float(material.metallicRoughnessTexture)), 0.0);
+        roughness *= mr.g;
+        metallic *= mr.b;
+    }
+
+
+    metallic = clamp(metallic, 0.0, 1.0);
+    roughness = clamp(roughness, 0.01, 1.0);
     float transmission = clamp(material.transmission, 0.0, 1.0);
 
     float transmissionProbability = transmission * (1.0 - metallic);
@@ -395,7 +406,7 @@ bool scatterPbrMetallicRoughness(Ray rayIn, HitRecord rec, Material material, ou
             attenuation = vec3(1.0);
         } else {
             direction = refract(unitDirection, rec.normal, ri);
-            attenuation = material.albedo;
+            attenuation = baseColor;
         }
         scattered = Ray(offsetRayOrigin(rec, direction), direction);
         return true;
@@ -404,10 +415,10 @@ bool scatterPbrMetallicRoughness(Ray rayIn, HitRecord rec, Material material, ou
     vec3 V = normalize(-rayIn.direction);
     float NoV = max(dot(rec.normal, V), 0.0);
 
-    vec3 F0 = mix(vec3(0.04), material.albedo, metallic);
+    vec3 F0 = mix(vec3(0.04), baseColor, metallic);
     vec3 F = fresnelSchlick(NoV, F0);
 
-    vec3 diffuseWeight = (vec3(1.0) - F) * (1.0 - metallic) * material.albedo;
+    vec3 diffuseWeight = (vec3(1.0) - F) * (1.0 - metallic) * baseColor;
     vec3 specularWeight = F;
     float diffuseEnergy = luminance(diffuseWeight);
     float specularEnergy = luminance(specularWeight);
