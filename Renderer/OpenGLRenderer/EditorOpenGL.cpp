@@ -52,6 +52,9 @@ namespace {
             gpuMaterial.Surface = glm::vec4(material.metallic, material.roughness, material.indexOfRefraction, material.transmission);
             gpuMaterial.Emission = glm::vec4(material.emission, material.emissionStrength);
             gpuMaterial.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
+            gpuMaterial.TextureIndices = glm::ivec4(
+                material.baseColorTexture == InvalidTextureId ? -1 : static_cast<int>(material.baseColorTexture),
+                material.metallicRoughnessTexture== InvalidTextureId ? -1 : static_cast<int>(material.metallicRoughnessTexture), -1, -1);
 
             gpuMaterial.AlbedoFuzz = glm::vec4(material.albedo,material.fuzz);
             gpuMaterial.Optical = glm::vec4(material.indexOfRefraction,0.0f,0.0f,0.0f);

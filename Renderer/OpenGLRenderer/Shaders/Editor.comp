@@ -28,6 +28,7 @@ struct PackedMaterial {
     vec4 surface;
     vec4 emission;
     ivec4 metadata;
+    ivec4 textureIndices;
 
     vec4 albedoFuzz;
     vec4 optical;
@@ -163,6 +164,9 @@ struct Material {
     vec3 emission;
     float emissionStrength;
 
+    int baseColorTexture;
+    int metallicRoughnessTexture;
+
     float fuzz;
 };
 
@@ -199,6 +203,9 @@ Material loadMaterial(int index) {
 
     material.emission = packed.emission.xyz;
     material.emissionStrength = packed.emission.w;
+
+    material.baseColorTexture = packed.textureIndices.x;
+    material.metallicRoughnessTexture = packed.textureIndices.y;
 //    material.refractionIndex = packed.optical.x;
 
 //    material.albedo = packed.albedoFuzz.xyz;
