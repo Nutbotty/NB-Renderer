@@ -29,60 +29,21 @@ namespace {
     constexpr std::uint32_t ComputeLocalSizeX = 16;
     constexpr std::uint32_t ComputeLocalSizeY = 16;
 
-    std::vector<GpuMaterial>
-BuildGpuMaterials(
-    const Scene& scene
-)
-    {
+    std::vector<GpuMaterial> BuildGpuMaterials(const Scene& scene) {
         std::vector<GpuMaterial> result;
-
-        const auto& materials =
-            scene.GetMaterials();
-
-        result.reserve(
-            materials.size()
-        );
-
-        for (
-            const SceneMaterial& material :
-            materials
-        )
-        {
-            GpuMaterial gpu{};
-
-            gpu.BaseColor =
-                material.baseColor;
-
-            gpu.Surface =
-                glm::vec4(
-                    material.metallic,
-                    material.roughness,
-                    material.indexOfRefraction,
-                    material.transmission
-                );
-
-            gpu.Emission =
-                glm::vec4(
-                    material.emission,
-                    material.emissionStrength
-                );
-
-            gpu.Metadata =
-                glm::ivec4(
-                    static_cast<int>(
-                        material.type
-                    ),
-                    0,
-                    0,
-                    0
-                );
-
-
-            result.push_back(
-                gpu
-            );
+        const auto& materials = scene.GetMaterials();
+        result.reserve(materials.size());
+        for (const SceneMaterial& material : materials) {
+            GpuMaterial gpuMat{};
+            gpuMat.BaseColor = material.baseColor;
+            gpuMat.Surface = glm::vec4(material.metallic, material.roughness, material.indexOfRefraction, material.transmission);
+            gpuMat.Emission = glm::vec4(material.emission, material.emissionStrength);
+            gpuMat.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
+            gpuMat.TextureIndices = glm::ivec4(
+                material.baseColorTexture == InvalidTextureId ? -1 : static_cast<int>(material.baseColorTexture),
+                material.metallicRoughnessTexture== InvalidTextureId ? -1 : static_cast<int>(material.metallicRoughnessTexture), -1, -1);
+            result.push_back(gpuMat);
         }
-
         return result;
     }
 }
