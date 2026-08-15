@@ -218,8 +218,9 @@ struct Camera {
 
 struct HitRecord {
     vec3 p;
-    vec3 normal;
     float t;
+    vec3 normal;
+    vec2 uv;
     bool frontFace;
     int material;
 };
@@ -613,6 +614,10 @@ bool hitMeshTri(int triIndex, Ray r, Interval rT, out HitRecord record) {
         outwardNormal = normalize(cross(edge1, edge2));
     }
     setFaceNormal(r, outwardNormal, record);
+    vec2 uv0 = meshVertexBuffer[index0].texCoord.xy;
+    vec2 uv1 = meshVertexBuffer[index1].texCoord.xy;
+    vec2 uv2 = meshVertexBuffer[index2].texCoord.xy;
+    record.uv = w * uv0 + u * uv1 + v * uv2;
     return true;
 }
 bool hitMesh(int meshIndex, Ray localRay, Interval rT, out HitRecord record) {
