@@ -70,6 +70,7 @@ struct PackedPrimitiveRef {
 struct PackedMeshVertex {
     vec4 position;
     vec4 normal;
+    vec4 texCoord;
 };
 struct PackedMeshTriangle {
 /*
