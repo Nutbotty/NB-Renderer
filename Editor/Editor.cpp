@@ -43,6 +43,10 @@ namespace {
 void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& scene) {
     assert(!m_Initialized);
     m_Camera = EditorCamera(scene.GetCamera());
+    m_DofEnabled = m_Camera.DefocusAngle > 0.0f;
+    if (m_DofEnabled) {
+        m_CameraDefocusAngle = m_Camera.DefocusAngle;
+    }
     m_Input = std::make_unique<Input>(m_Camera);
     m_Input->Initialize(window.GetNativeWindow());
 
@@ -64,6 +68,9 @@ void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     DrawMenu(scene, renderer);
     if (m_ShowScenePanel) {
         DrawScenePanel(scene, renderer);
+    }
+    if (m_ShowCameraPanel) {
+        DrawCameraPanel();
     }
     if (m_ShowViewport) {
         DrawViewport(renderer);
@@ -109,6 +116,7 @@ void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Scene", nullptr, &m_ShowScenePanel);
         ImGui::MenuItem("Environment", nullptr, &m_ShowEnvironmentPanel);
+        ImGui::MenuItem("Camera", nullptr, &m_ShowCameraPanel);
         ImGui::MenuItem("Viewport", nullptr, &m_ShowViewport);
         ImGui::MenuItem("Renderer", nullptr, &m_ShowRendererPanel);
         ImGui::EndMenu();
@@ -169,6 +177,51 @@ void EditorLayer::DrawScenePanel(Scene& scene, Renderer& renderer) {
         if (changed) {
             renderer.UpdateMaterials(scene);
         }
+    }
+    ImGui::End();
+}
+void EditorLayer::DrawCameraPanel() {
+    if (!ImGui::Begin("Camera", &m_ShowCameraPanel)) {
+        ImGui::End();
+        return;
+    }
+    if (ImGui::CollapsingHeader("Lens", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::SliderFloat("Field of View", &m_Camera.VerticalFov, 10.0f, 120.0f, "%.1f deg");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Vertical field of view");
+        }
+    }
+    if (ImGui::CollapsingHeader("Depth of Field", ImGuiTreeNodeFlags_DefaultOpen)) {
+        bool dofChanged = ImGui::Checkbox("Enable DoF", &m_DofEnabled);
+        if (dofChanged) {
+            if (m_DofEnabled) {
+                m_Camera.DefocusAngle = std::max(m_CameraDefocusAngle, 0.01f);
+            } else {
+                if (m_Camera.DefocusAngle > 0.0f) {
+                    m_CameraDefocusAngle = m_Camera.DefocusAngle;
+                }
+                m_Camera.DefocusAngle = 0.0f;
+            }
+        }
+        if (!m_DofEnabled) {
+            ImGui::BeginDisabled();
+        }
+        ImGui::DragFloat("Focus Distance", &m_Camera.FocusDistance, 0.05f, 0.01f, 1000.0f, "%.2f");
+        float displayedDefocusAngle = m_DofEnabled ? m_Camera.DefocusAngle : m_CameraDefocusAngle;
+        if (ImGui::SliderFloat("Defocus Angle", &displayedDefocusAngle, 0.01f, 10.0f, "%.2f deg")) {
+            m_CameraDefocusAngle = displayedDefocusAngle;
+            if (m_DofEnabled) {
+                m_Camera.DefocusAngle = displayedDefocusAngle;
+            }
+        }
+        if (!m_DofEnabled) {
+            ImGui::EndDisabled();
+        }
+    }
+    if (ImGui::CollapsingHeader("Transform")) {
+        ImGui::DragFloat3("Position", &m_Camera.LookFrom.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
+        ImGui::DragFloat3("Target", &m_Camera.LookAt.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
+        ImGui::DragFloat3("Up", &m_Camera.VUp.x, 0.01f, -1.0f, 1.0f, "%.3f");
     }
     ImGui::End();
 }
