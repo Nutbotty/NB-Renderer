@@ -37,124 +37,28 @@ namespace {
     constexpr std::uint32_t ComputeLocalSizeY = 16;
 
     std::vector<std::uint8_t>
-ResizeRgba8Nearest(
-    const SceneTexture& texture,
-    int targetWidth,
-    int targetHeight
-)
-{
-    if (
-        texture.width <= 0
-        || texture.height <= 0
-        || texture.channels != 4
-    )
-    {
-        throw std::runtime_error(
-            "ResizeRgba8Nearest requires RGBA8 texture"
-        );
+ResizeRgba8Nearest(const SceneTexture& texture, int targetWidth, int targetHeight) {
+    if (texture.width <= 0 || texture.height <= 0 || texture.channels != 4) {
+        throw std::runtime_error("ResizeRgba8Nearest requires RGBA8 texture");
     }
-
-    const std::size_t expectedSize =
-        static_cast<std::size_t>(
-            texture.width
-        )
-        *
-        static_cast<std::size_t>(
-            texture.height
-        )
-        * 4;
-
-    if (
-        texture.pixels.size()
-        < expectedSize
-    )
-    {
-        throw std::runtime_error(
-            "SceneTexture pixel data is incomplete"
-        );
+    const std::size_t expectedSize = static_cast<std::size_t>(texture.width) * static_cast<std::size_t>(texture.height) * 4;
+    if (texture.pixels.size() < expectedSize) {
+        throw std::runtime_error("SceneTexture pixel data is incomplete");
     }
-
-    /*
-     * Avoid a resize/copy loop if already correct.
-     */
-    if (
-        texture.width == targetWidth
-        && texture.height == targetHeight
-    )
-    {
+    if (texture.width == targetWidth && texture.height == targetHeight) {
         return texture.pixels;
     }
-
-    std::vector<std::uint8_t> output(
-        static_cast<std::size_t>(
-            targetWidth
-        )
-        *
-        static_cast<std::size_t>(
-            targetHeight
-        )
-        * 4
-    );
-
-    for (
-        int y = 0;
-        y < targetHeight;
-        ++y
-    )
-    {
-        const int sourceY =
-            std::min(
-                texture.height - 1,
-                y
-                * texture.height
-                / targetHeight
-            );
-
-        for (
-            int x = 0;
-            x < targetWidth;
-            ++x
-        )
-        {
-            const int sourceX =
-                std::min(
-                    texture.width - 1,
-                    x
-                    * texture.width
-                    / targetWidth
-                );
-
-            const std::size_t src =
-                (
-                    static_cast<std::size_t>(
-                        sourceY
-                    )
-                    * texture.width
-                    + sourceX
-                )
-                * 4;
-
-            const std::size_t dst =
-                (
-                    static_cast<std::size_t>(
-                        y
-                    )
-                    * targetWidth
-                    + x
-                )
-                * 4;
-
-            output[dst + 0] =
-                texture.pixels[src + 0];
-
-            output[dst + 1] =
-                texture.pixels[src + 1];
-
-            output[dst + 2] =
-                texture.pixels[src + 2];
-
-            output[dst + 3] =
-                texture.pixels[src + 3];
+    std::vector<std::uint8_t> output(static_cast<std::size_t>(targetWidth) * static_cast<std::size_t>(targetHeight) * 4);
+    for (int y = 0; y < targetHeight; ++y) {
+        const int sourceY = std::min(texture.height - 1, y * texture.height / targetHeight);
+        for (int x = 0; x < targetWidth; ++x) {
+            const int sourceX = std::min(texture.width - 1, x * texture.width / targetWidth);
+            const std::size_t src = (static_cast<std::size_t>(sourceY) * texture.width + sourceX) * 4;
+            const std::size_t dst = (static_cast<std::size_t>(y) * targetWidth + x) * 4;
+            output[dst + 0] = texture.pixels[src + 0];
+            output[dst + 1] = texture.pixels[src + 1];
+            output[dst + 2] = texture.pixels[src + 2];
+            output[dst + 3] = texture.pixels[src + 3];
         }
     }
 
@@ -181,61 +85,17 @@ ResizeRgba8Nearest(
             gpuMat.Surface = glm::vec4(material.metallic, material.roughness, material.indexOfRefraction, material.transmission);
             gpuMat.Emission = glm::vec4(material.emission, material.emissionStrength);
             gpuMat.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
-            gpuMat.TextureIndices =
-            glm::ivec4(GetTextureLayer(material.baseColorTexture, baseColorLayers),
+            gpuMat.TextureIndices = glm::ivec4(GetTextureLayer(material.baseColorTexture, baseColorLayers),
                 GetTextureLayer(material.metallicRoughnessTexture, metalRoughLayers),-1, -1);
-            const int baseLayer =
-    GetTextureLayer(
-        material.baseColorTexture,
-        baseColorLayers
-    );
-
-            const int mrLayer =
-                GetTextureLayer(
-                    material.metallicRoughnessTexture,
-                    metalRoughLayers
-                );
-
-            std::cerr
-                << "Material "
-                << result.size()
-                << ": Scene base TextureId="
-                << (
-                    material.baseColorTexture
-                        == InvalidTextureId
-                        ? -1
-                        : static_cast<int>(
-                            material.baseColorTexture
-                        )
-                )
-                << " -> GPU base layer="
-                << baseLayer
-                << ", Scene MR TextureId="
-                << (
-                    material.metallicRoughnessTexture
-                        == InvalidTextureId
-                        ? -1
-                        : static_cast<int>(
-                            material.metallicRoughnessTexture
-                        )
-                )
-                << " -> GPU MR layer="
-                << mrLayer
-                << '\n';
-
-            gpuMat.TextureIndices =
-                glm::ivec4(
-                    baseLayer,
-                    mrLayer,
-                    -1,
-                    -1
-                );
-            std::cerr
-    << "Material texture layers: base="
-    << gpuMat.TextureIndices.x
-    << " mr="
-    << gpuMat.TextureIndices.y
-    << '\n';
+            const int baseLayer = GetTextureLayer(material.baseColorTexture, baseColorLayers);
+            const int mrLayer = GetTextureLayer(material.metallicRoughnessTexture, metalRoughLayers);
+            std::cerr << "Material " << result.size() << ": Scene base TextureId=" << (
+                    material.baseColorTexture == InvalidTextureId ? -1 : static_cast<int>(material.baseColorTexture))
+                << " -> GPU base layer=" << baseLayer << ", Scene MR TextureId="<< (
+                    material.metallicRoughnessTexture == InvalidTextureId ? -1 : static_cast<int>(material.metallicRoughnessTexture))
+            << " -> GPU MR layer=" << mrLayer << '\n';
+            gpuMat.TextureIndices = glm::ivec4(baseLayer, mrLayer, -1, -1);
+            std::cerr << "Material texture layers: base=" << gpuMat.TextureIndices.x << " mr=" << gpuMat.TextureIndices.y << '\n';
             result.push_back(gpuMat);
         }
         return result;
@@ -314,351 +174,87 @@ void OpenGLRenderer::UpdateMaterials(const Scene& scene) {
     ResetAccumulation();
 }
 
-void OpenGLRenderer::UploadMaterialTextures(
-    const Scene& scene
-)
-{
-    const auto& textures =
-        scene.GetTextures();
+void OpenGLRenderer::UploadMaterialTextures(const Scene& scene) {
+    const auto& textures = scene.GetTextures();
+    m_BaseColorLayerByTexture.assign(textures.size(), -1);
+    m_MetalRoughLayerByTexture.assign(textures.size(), -1);
+    std::vector<TextureId> baseColorTextures;
+    std::vector<TextureId> metalRoughTextures;
 
-    /*
-     * One map entry per Scene TextureId.
-     */
-    m_BaseColorLayerByTexture.assign(
-        textures.size(),
-        -1
-    );
-
-    m_MetalRoughLayerByTexture.assign(
-        textures.size(),
-        -1
-    );
-
-    std::vector<TextureId>
-        baseColorTextures;
-
-    std::vector<TextureId>
-        metalRoughTextures;
-
-    /*
-     * Adds a SceneTexture to an array only once.
-     */
-    auto registerTexture =
-        [&](
-            TextureId textureId,
-            std::vector<int>& layerMap,
-            std::vector<TextureId>& layers
-        )
-        {
-            if (
-                textureId
-                == InvalidTextureId
-            )
-            {
+    auto registerTexture = [&](TextureId textureId, std::vector<int>& layerMap, std::vector<TextureId>& layers) {
+            if (textureId == InvalidTextureId) {
                 return;
             }
-
-            const std::size_t index =
-                static_cast<std::size_t>(
-                    textureId
-                );
-
-            if (index >= textures.size())
-            {
-                throw std::out_of_range(
-                    "Material references invalid TextureId"
-                );
+            const std::size_t index = static_cast<std::size_t>(textureId);
+            if (index >= textures.size()) {
+                throw std::out_of_range("Material references invalid TextureId");
             }
-
-            /*
-             * Already added.
-             */
-            if (layerMap[index] >= 0)
-            {
+            if (layerMap[index] >= 0) {
                 return;
             }
-
-            const SceneTexture& texture =
-                textures[index];
-
-            if (
-                texture.type
-                != SceneTextureType::Image2D
-            )
-            {
-                throw std::runtime_error(
-                    "PBR material texture must be LDR"
-                );
+            const SceneTexture& texture = textures[index];
+            if (texture.type != SceneTextureType::Image2D) {
+                throw std::runtime_error("PBR material texture must be LDR");
             }
-
-            const int layer =
-                static_cast<int>(
-                    layers.size()
-                );
-
-            layerMap[index] =
-                layer;
-
-            layers.push_back(
-                textureId
-            );
+            const int layer = static_cast<int>(layers.size());
+            layerMap[index] = layer;
+            layers.push_back(textureId);
         };
-
-    /*
-     * Discover which textures are actually needed.
-     */
-    for (
-        const SceneMaterial& material :
-        scene.GetMaterials()
-    )
-    {
-        registerTexture(
-            material.baseColorTexture,
-            m_BaseColorLayerByTexture,
-            baseColorTextures
-        );
-
-        registerTexture(
-            material.metallicRoughnessTexture,
-            m_MetalRoughLayerByTexture,
-            metalRoughTextures
-        );
+    for (const SceneMaterial& material : scene.GetMaterials()) {
+        registerTexture(material.baseColorTexture, m_BaseColorLayerByTexture, baseColorTextures);
+        registerTexture(material.metallicRoughnessTexture, m_MetalRoughLayerByTexture, metalRoughTextures);
     }
-
-    /*
-     * Create actual GL arrays.
-     */
-    m_BaseColorTextureArray =
-        CreatePbrTextureArray(
-            scene,
-            baseColorTextures,
-            GL_SRGB8_ALPHA8
-        );
-
-    m_MetalRoughTextureArray =
-        CreatePbrTextureArray(
-            scene,
-            metalRoughTextures,
-            GL_RGBA8
-        );
-
-    std::cerr
-        << "Uploaded PBR texture arrays:\n"
-        << "  base color layers: "
-        << baseColorTextures.size()
-        << '\n'
-        << "  metal/rough layers: "
-        << metalRoughTextures.size()
-        << '\n';
+    m_BaseColorTextureArray = CreatePbrTextureArray(scene, baseColorTextures, GL_SRGB8_ALPHA8);
+    m_MetalRoughTextureArray = CreatePbrTextureArray(scene, metalRoughTextures, GL_RGBA8);
+    std::cerr << "Uploaded PBR texture arrays:\n" << "  base color layers: " << baseColorTextures.size() << '\n'
+        << "  metal/rough layers: " << metalRoughTextures.size() << '\n';
 }
 
-GLuint OpenGLRenderer::CreatePbrTextureArray(
-    const Scene& scene,
-    const std::vector<TextureId>& layerTextures,
-    GLenum internalFormat
-)
-{
-    if (layerTextures.empty())
-    {
+GLuint OpenGLRenderer::CreatePbrTextureArray(const Scene& scene, const std::vector<TextureId>& layerTextures, GLenum internalFormat) {
+    if (layerTextures.empty()) {
         return 0;
     }
-
-    const auto& textures =
-        scene.GetTextures();
-
-    /*
-     * Check hardware limit.
-     */
+    const auto& textures = scene.GetTextures();
     GLint maxLayers = 0;
-
-    glGetIntegerv(
-        GL_MAX_ARRAY_TEXTURE_LAYERS,
-        &maxLayers
-    );
-
-    if (
-        static_cast<GLint>(
-            layerTextures.size()
-        )
-        > maxLayers
-    )
-    {
-        throw std::runtime_error(
-            "Too many material textures for "
-            "GL_TEXTURE_2D_ARRAY"
-        );
+    glGetIntegerv(GL_MAX_ARRAY_TEXTURE_LAYERS, &maxLayers);
+    if (static_cast<GLint>(layerTextures.size()) > maxLayers) {
+        throw std::runtime_error("Too many material textures for " "GL_TEXTURE_2D_ARRAY");
     }
-
     GLint maxTextureSize = 0;
-
-    glGetIntegerv(
-        GL_MAX_TEXTURE_SIZE,
-        &maxTextureSize
-    );
-
-    if (
-        PbrTextureWidth > maxTextureSize
-        || PbrTextureHeight > maxTextureSize
-    )
-    {
-        throw std::runtime_error(
-            "PBR texture-array resolution exceeds "
-            "GL_MAX_TEXTURE_SIZE"
-        );
+    glGetIntegerv(GL_MAX_TEXTURE_SIZE, &maxTextureSize);
+    if (PbrTextureWidth > maxTextureSize || PbrTextureHeight > maxTextureSize) {
+        throw std::runtime_error("PBR texture-array resolution exceeds " "GL_MAX_TEXTURE_SIZE");
     }
-
     GLuint arrayTexture = 0;
-
-    glGenTextures(
-        1,
-        &arrayTexture
-    );
-
-    glBindTexture(
-        GL_TEXTURE_2D_ARRAY,
-        arrayTexture
-    );
-
-    /*
-     * Allocate:
-     *
-     * width  = 1024
-     * height = 1024
-     * depth  = number of array layers
-     *
-     * One mip level for now.
-     */
-    glTexStorage3D(
-        GL_TEXTURE_2D_ARRAY,
-        1,
-        internalFormat,
-        PbrTextureWidth,
-        PbrTextureHeight,
-        static_cast<GLsizei>(
-            layerTextures.size()
-        )
-    );
-
+    glGenTextures(1, &arrayTexture);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, arrayTexture);
+     // fixed dimensions 1024 x 1024 for now. currently only one mip map layer
+    glTexStorage3D(GL_TEXTURE_2D_ARRAY, 1, internalFormat, PbrTextureWidth,
+        PbrTextureHeight, static_cast<GLsizei>(layerTextures.size()));
     GLint previousUnpackAlignment = 0;
-
-    glGetIntegerv(
-        GL_UNPACK_ALIGNMENT,
-        &previousUnpackAlignment
-    );
-
-    glPixelStorei(
-        GL_UNPACK_ALIGNMENT,
-        1
-    );
-
-    for (
-        std::size_t layer = 0;
-        layer < layerTextures.size();
-        ++layer
-    )
-    {
-        const TextureId textureId =
-            layerTextures[layer];
-
-        const std::size_t textureIndex =
-            static_cast<std::size_t>(
-                textureId
-            );
-
-        if (
-            textureIndex
-            >= textures.size()
-        )
-        {
-            throw std::runtime_error(
-                "Invalid Scene TextureId while "
-                "building texture array"
-            );
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &previousUnpackAlignment);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    for (std::size_t layer = 0; layer < layerTextures.size(); ++layer) {
+        const TextureId textureId = layerTextures[layer];
+        const std::size_t textureIndex = static_cast<std::size_t>(textureId);
+        if (textureIndex >= textures.size()) {
+            throw std::runtime_error("Invalid Scene TextureId while " "building texture array");
         }
-
-        const SceneTexture& texture =
-            textures[textureIndex];
-
-        if (
-            texture.type
-            != SceneTextureType::Image2D
-        )
-        {
-            throw std::runtime_error(
-                "Attempted to upload non-LDR texture "
-                "to PBR texture array"
-            );
+        const SceneTexture& texture = textures[textureIndex];
+        if (texture.type != SceneTextureType::Image2D) {
+            throw std::runtime_error("Attempted to upload non-LDR texture " "to PBR texture array");
         }
-
-        const auto pixels =
-            ResizeRgba8Nearest(
-                texture,
-                PbrTextureWidth,
-                PbrTextureHeight
-            );
-
-        /*
-         * z-offset == array layer.
-         * depth == 1 means upload exactly one layer.
-         */
-        glTexSubImage3D(
-            GL_TEXTURE_2D_ARRAY,
-            0,
-
-            0,
-            0,
-            static_cast<GLint>(
-                layer
-            ),
-
-            PbrTextureWidth,
-            PbrTextureHeight,
-            1,
-
-            GL_RGBA,
-            GL_UNSIGNED_BYTE,
-
-            pixels.data()
-        );
+        const auto pixels = ResizeRgba8Nearest(texture, PbrTextureWidth, PbrTextureHeight);
+        // z-offset == array layer, depth == 1 means upload exactly one layer
+        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, static_cast<GLint>(layer),
+            PbrTextureWidth, PbrTextureHeight, 1, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
     }
-
-    glPixelStorei(
-        GL_UNPACK_ALIGNMENT,
-        previousUnpackAlignment
-    );
-
-    /*
-     * No mipmaps yet.
-     */
-    glTexParameteri(
-        GL_TEXTURE_2D_ARRAY,
-        GL_TEXTURE_MIN_FILTER,
-        GL_LINEAR
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D_ARRAY,
-        GL_TEXTURE_MAG_FILTER,
-        GL_LINEAR
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D_ARRAY,
-        GL_TEXTURE_WRAP_S,
-        GL_REPEAT
-    );
-
-    glTexParameteri(
-        GL_TEXTURE_2D_ARRAY,
-        GL_TEXTURE_WRAP_T,
-        GL_REPEAT
-    );
-
-    glBindTexture(
-        GL_TEXTURE_2D_ARRAY,
-        0
-    );
-
+    glPixelStorei(GL_UNPACK_ALIGNMENT, previousUnpackAlignment);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, 0);
     return arrayTexture;
 }
 
@@ -697,14 +293,12 @@ void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& cam
     Shader& shader = *m_EditorCompShader;
     shader.use();
     BindSceneBuffers();
-
     glActiveTexture(GL_TEXTURE0 + EnvironmentTextureUnit);
     glBindTexture(GL_TEXTURE_2D, m_EnvironmentTexture);
     glActiveTexture(GL_TEXTURE0 + BaseColorTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_BaseColorTextureArray);
     glActiveTexture(GL_TEXTURE0 + MetalRoughTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_MetalRoughTextureArray);
-
     glBindImageTexture(0, m_OutputTexture, 0, GL_FALSE,
         0, GL_READ_WRITE, GL_RGBA32F);
     shader.setUInt("uFrameIndex", m_AccumulationSamples);
@@ -826,18 +420,11 @@ void OpenGLRenderer::Resize(std::uint32_t width, std::uint32_t height) {
     CreateOutputTexture(width, height);
 }
 
-void OpenGLRenderer::DestroyOutputTexture()
-{
-    if (m_OutputTexture != 0)
-    {
-        glDeleteTextures(
-            1,
-            &m_OutputTexture
-        );
-
+void OpenGLRenderer::DestroyOutputTexture() {
+    if (m_OutputTexture != 0) {
+        glDeleteTextures(1, &m_OutputTexture);
         m_OutputTexture = 0;
     }
-
     m_RenderWidth = 0;
     m_RenderHeight = 0;
 }
