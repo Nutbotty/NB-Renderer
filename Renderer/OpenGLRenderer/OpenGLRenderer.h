@@ -52,6 +52,10 @@ private:
     void SetEnvironmentUniforms(const Scene& scene);
     void DispatchCompute(const Scene& scene, const EditorCamera& camera);
 
+    //textures
+    void UploadMaterialTextures(const Scene& scene);
+    GLuint CreatePbrTextureArray(const Scene& scene, const std::vector<TextureId>& layerTextures, GLenum internalFormat);
+
     // Helpers
     GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size);
     static unsigned int CreateHdrTexture(const SceneTexture& texture);
@@ -76,7 +80,12 @@ private:
     unsigned int m_MeshTriangleBuffer = 0;
     unsigned int m_MeshBuffer = 0;
     unsigned int m_BlasBuffer = 0;
+
     unsigned int m_EnvironmentTexture = 0;
+    GLuint m_BaseColorTextureArray = 0;
+    GLuint m_MetalRoughTextureArray = 0;
+    std::vector<int> m_BaseColorLayerByTexture;
+    std::vector<int> m_MetalRoughLayerByTexture;
 
     BvhBuildResult m_GpuScene;
     std::uint32_t m_AccumulationSamples = 0;
