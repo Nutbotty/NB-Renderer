@@ -6,7 +6,6 @@
 #define NB_RENDERER_SCENE_H
 
 #include <vector>
-#include <cstdint>
 #include <string>
 
 #include "../external/glm/glm/glm.hpp"
@@ -69,6 +68,20 @@ struct SceneMaterial {
 
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
     float fuzz = 0.0f;
+};
+struct SceneTransform {
+    glm::vec3 Position{0.0f};
+    glm::vec3 Rotation{0.0f}; // degrees
+    glm::vec3 Scale{1.0f};
+    glm::mat4 ToMatrix() const {
+        glm::mat4 matrix{1.0f};
+        matrix = glm::translate(matrix, Position);
+        matrix = glm::rotate(matrix, glm::radians(Rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
+        matrix = glm::rotate(matrix, glm::radians(Rotation.y), glm::vec3(0.0f, 1.0f, 0.0f));
+        matrix = glm::rotate(matrix, glm::radians(Rotation.z), glm::vec3(0.0f, 0.0f, 1.0f));
+        matrix = glm::scale(matrix, Scale);
+        return matrix;
+    }
 };
 
 //primitive
