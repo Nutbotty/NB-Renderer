@@ -42,6 +42,7 @@ private:
     void DrawMenu(Scene& scene, Renderer& renderer);
     void DrawScenePanel(Scene& scene, Renderer& renderer);
     void DrawEnvironmentPanel(Scene& scene, Renderer& renderer);
+    void DrawObjectPanel(Scene& scene, Renderer& renderer);
     void DrawCameraPanel();
     void DrawViewport(Renderer& renderer);
 
@@ -58,7 +59,8 @@ private:
     bool m_ViewportFocused = false;
     bool m_ShowViewport = true;
     bool m_ShowRendererPanel = true;
-
+    bool m_ShowObjectPanel = true;
+    std::size_t m_SelectedObject = 0;
     bool m_ShowCameraPanel = true;
     bool m_DofEnabled = false;
     float m_CameraDefocusAngle = 2.5f;
