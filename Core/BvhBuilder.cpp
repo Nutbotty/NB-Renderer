@@ -35,6 +35,7 @@ namespace {
         GpuPrimitiveType Type = GpuPrimitiveType::Sphere;
         std::uint32_t PrimitiveIndex = 0;
         std::uint32_t TransformIndex = 0;
+        int MaterialOverride = -1;
         Bounds BoundingBox;
         glm::vec3 Centroid{0.0, 0.0, 0.0};
     };
@@ -401,6 +402,8 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
         reference.Type = GpuPrimitiveType::Mesh;
         reference.PrimitiveIndex = meshInstance.mesh;
         reference.TransformIndex = transformIndex;
+        reference.MaterialOverride = meshInstance.materialOverride
+            == InvalidMaterialId ? -1 : static_cast<int>(meshInstance.materialOverride);
         reference.BoundingBox = TransformBounds(localBounds, meshInstance.objectToWorld);
         const glm::vec3 localCentroid = 0.5f * (mesh.boundsMin + mesh.boundsMax);
         reference.Centroid = TransformPoint(meshInstance.objectToWorld, localCentroid);
@@ -423,7 +426,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
             static_cast<int>(reference.Type),
             static_cast<int>(reference.PrimitiveIndex),
             static_cast<int>(reference.TransformIndex),
-            0);
+            reference.MaterialOverride);
         result.PrimitiveRefs.push_back(gpuReference);
     }
     return result;
