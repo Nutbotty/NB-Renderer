@@ -69,6 +69,9 @@ void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     if (m_ShowScenePanel) {
         DrawScenePanel(scene, renderer);
     }
+    if (m_ShowObjectPanel) {
+        DrawObjectPanel(scene, renderer);
+    }
     if (m_ShowCameraPanel) {
         DrawCameraPanel();
     }
@@ -117,6 +120,7 @@ void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
         ImGui::MenuItem("Scene", nullptr, &m_ShowScenePanel);
         ImGui::MenuItem("Environment", nullptr, &m_ShowEnvironmentPanel);
         ImGui::MenuItem("Camera", nullptr, &m_ShowCameraPanel);
+        ImGui::MenuItem("Objects", nullptr, &m_ShowObjectPanel);
         ImGui::MenuItem("Viewport", nullptr, &m_ShowViewport);
         ImGui::MenuItem("Renderer", nullptr, &m_ShowRendererPanel);
         ImGui::EndMenu();
@@ -180,6 +184,81 @@ void EditorLayer::DrawScenePanel(Scene& scene, Renderer& renderer) {
     }
     ImGui::End();
 }
+
+void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer)
+{
+    if (!ImGui::Begin("Objects", &m_ShowObjectPanel)) {
+        ImGui::End();
+        return;
+    }
+
+    auto& instances = scene.GetMeshInstances();
+
+    if (instances.empty()) {
+        ImGui::TextDisabled("No objects in scene.");
+        ImGui::End();
+        return;
+    }
+    if (m_SelectedObject >= instances.size()) {
+        m_SelectedObject = 0;
+    }
+
+    if (ImGui::BeginListBox("##ObjectList", ImVec2(-FLT_MIN, 150.0f))) {
+        for (std::size_t i = 0; i < instances.size(); ++i) {
+            const bool selected = i == m_SelectedObject;
+            const std::string label = "Mesh Instance " + std::to_string(i);
+            if (ImGui::Selectable(label.c_str(), selected)) {
+                m_SelectedObject = i;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndListBox();
+    }
+    ImGui::Separator();
+    SceneMeshInstance& instance = instances[m_SelectedObject];
+
+    bool instanceChanged = false;
+    if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
+        instanceChanged |= ImGui::DragFloat3("Position", &instance.transform.Position.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
+        instanceChanged |= ImGui::DragFloat3("Rotation", &instance.transform.Rotation.x, 0.5f, -360.0f, 360.0f, "%.1f deg");
+        instanceChanged |= ImGui::DragFloat3("Scale", &instance.transform.Scale.x, 0.01f, 0.001f, 1000.0f, "%.3f");
+    }
+
+    if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
+    auto& materials = scene.GetMaterials();
+    std::string preview;
+    if (ImGui::BeginCombo("Override", preview.c_str())) {
+        const bool useMeshMaterials = instance.materialOverride == InvalidMaterialId;
+        if (ImGui::Selectable("Use Mesh Materials", useMeshMaterials)) {
+            instance.materialOverride = InvalidMaterialId;
+            instanceChanged = true;
+        }
+        ImGui::Separator();
+        for (std::size_t i = 0; i < materials.size(); ++i) {
+            const MaterialId id = static_cast<MaterialId>(i);
+            const bool selected = instance.materialOverride == id;
+            const std::string label = "Material " + std::to_string(i);
+            if (ImGui::Selectable(label.c_str(), selected)) {
+                instance.materialOverride =  id;
+                instanceChanged = true;
+            }
+            if (selected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndCombo();
+    }
+    }
+
+
+    if (instanceChanged) {
+    }
+
+    ImGui::End();
+}
+
 void EditorLayer::DrawCameraPanel() {
     if (!ImGui::Begin("Camera", &m_ShowCameraPanel)) {
         ImGui::End();
