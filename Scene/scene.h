@@ -9,6 +9,7 @@
 #include <string>
 
 #include "../external/glm/glm/glm.hpp"
+#include "../external/glm/glm/gtc/matrix_transform.hpp"
 
 using MaterialId = std::uint32_t;
 using SphereId = std::uint32_t;
@@ -139,6 +140,7 @@ struct SceneMesh {
 struct SceneMeshInstance {
     MeshId mesh = 0;
     glm::mat4 objectToWorld{1.0f};
+    SceneTransform transform;
     MaterialId materialOverride = InvalidMaterialId;
 };
 
