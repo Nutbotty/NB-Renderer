@@ -61,7 +61,7 @@ struct PackedPrimitiveRef {
  * x = primitive type
  * y = primitive index
  * z = transform-buffer index
- * w = unused
+ * w = mat override, -1 = default
  */
     ivec4 metadata;
 };
@@ -716,8 +716,17 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     int primitiveType = primitiveRef.metadata.x;
     int primitiveIndex = primitiveRef.metadata.y;
     int transformIndex = primitiveRef.metadata.z;
+    int materialOverride = primitiveRef.metadata.w;
+    if (materialOverride >= 0) {
+        record.material = materialOverride;
+    }
     if (transformIndex == 0) {
-        return hitLocalPrimitive(primitiveType, primitiveIndex, r, rT,record);
+        if (hitLocalPrimitive(primitiveType, primitiveIndex, r, rT,record)) {
+            if (materialOverride >= 0) {
+                record.material = materialOverride;
+            }
+        }
+        return true;
     }
 
     mat4 worldToObject = transformBuffer[transformIndex].worldToObject;
@@ -735,6 +744,10 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     mat3 normalToWorld = transpose(mat3(worldToObject));
     vec3 worldOutwardNormal = normalize(normalToWorld * localOutwardNormal);
     setFaceNormal(r, worldOutwardNormal, record);
+
+    if (materialOverride >= 0) {
+        record.material = materialOverride;
+    }
     return true;
 }
 bool hitWorld(Ray ray, Interval rayT, out HitRecord record) {

@@ -218,22 +218,28 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer)
     }
     ImGui::Separator();
     SceneMeshInstance& instance = instances[m_SelectedObject];
-
     bool instanceChanged = false;
+
+
+    bool materialChanged = false;
+
+
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         instanceChanged |= ImGui::DragFloat3("Position", &instance.transform.Position.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
         instanceChanged |= ImGui::DragFloat3("Rotation", &instance.transform.Rotation.x, 0.5f, -360.0f, 360.0f, "%.1f deg");
         instanceChanged |= ImGui::DragFloat3("Scale", &instance.transform.Scale.x, 0.01f, 0.001f, 1000.0f, "%.3f");
     }
-
     if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
-    auto& materials = scene.GetMaterials();
-    std::string preview;
+        auto& materials = scene.GetMaterials();
+        std::string preview;
     if (ImGui::BeginCombo("Override", preview.c_str())) {
         const bool useMeshMaterials = instance.materialOverride == InvalidMaterialId;
         if (ImGui::Selectable("Use Mesh Materials", useMeshMaterials)) {
             instance.materialOverride = InvalidMaterialId;
             instanceChanged = true;
+
+            materialChanged = true;
+
         }
         ImGui::Separator();
         for (std::size_t i = 0; i < materials.size(); ++i) {
@@ -243,6 +249,9 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer)
             if (ImGui::Selectable(label.c_str(), selected)) {
                 instance.materialOverride =  id;
                 instanceChanged = true;
+
+                materialChanged = true;
+
             }
             if (selected) {
                 ImGui::SetItemDefaultFocus();
@@ -253,6 +262,10 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer)
     }
 
 
+
+    if (materialChanged) {
+        renderer.SetScene(scene);
+    }
     if (instanceChanged) {
     }
 
