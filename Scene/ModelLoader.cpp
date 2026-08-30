@@ -585,31 +585,19 @@ namespace
     {
         std::vector<SceneMeshVertex> vertices;
         std::vector<SceneMeshTriangle> triangles;
+        std::vector<MaterialId> meshMaterials;
 
         bool loadedAnyPrimitive = false;
         bool allPrimitivesHaveNormals = true;
         bool allPrimitivesHaveTexCoords = true;
 
-        for (
-            const fastgltf::Primitive& primitive :
-            gltfMesh.primitives
-        )
-        {
-            if (
-                primitive.type
-                != fastgltf::PrimitiveType::Triangles
-            )
-            {
-                std::cerr
-                    << "Skipping non-triangle glTF "
-                       "primitive\n";
-
+        for (const fastgltf::Primitive& primitive : gltfMesh.primitives) {
+            if (primitive.type != fastgltf::PrimitiveType::Triangles) {
+                std::cerr << "Skipping non-triangle glTF " "primitive\n";
                 continue;
             }
-
             std::uint32_t vertexOffset = 0;
             std::size_t vertexCount = 0;
-
             if (
                 !LoadPrimitivePositions(
                     asset,
@@ -669,57 +657,25 @@ namespace
                 return false;
             }
 
-            MaterialId material =
-                defaultMaterial;
-
-            if (primitive.materialIndex.has_value())
-            {
-                const std::size_t gltfMaterialIndex =
-                    primitive.materialIndex.value();
-
-                if (
-                    gltfMaterialIndex
-                    >= materialMap.size()
-                )
-                {
-                    std::cerr
-                        << "Primitive contains an invalid "
-                           "material index\n";
-
+            MaterialId material = defaultMaterial;
+            if (primitive.materialIndex.has_value()) {
+                const std::size_t gltfMaterialIndex = primitive.materialIndex.value();
+                if (gltfMaterialIndex >= materialMap.size()) {
+                    std::cerr << "Primitive contains an invalid " "material index\n";
                     return false;
                 }
-
-                material =
-                    materialMap[
-                        gltfMaterialIndex
-                    ];
+                material = materialMap[gltfMaterialIndex];
             }
-
-            for (
-                std::size_t index = 0;
-                index < indices.size();
-                index += 3
-            )
-            {
-                const std::uint32_t localIndex0 =
-                    indices[index + 0];
-
-                const std::uint32_t localIndex1 =
-                    indices[index + 1];
-
-                const std::uint32_t localIndex2 =
-                    indices[index + 2];
-
-                if (
-                    localIndex0 >= vertexCount
-                    || localIndex1 >= vertexCount
-                    || localIndex2 >= vertexCount
-                )
-                {
-                    std::cerr
-                        << "Primitive contains an index "
-                           "outside its vertex range\n";
-
+            // Register the material as one of this mesh's slots.
+            if (std::find(meshMaterials.begin(), meshMaterials.end(), material) == meshMaterials.end()) {
+                meshMaterials.push_back(material);
+            }
+            for (std::size_t index = 0; index < indices.size(); index += 3) {
+                const std::uint32_t localIndex0 = indices[index + 0];
+                const std::uint32_t localIndex1 = indices[index + 1];
+                const std::uint32_t localIndex2 = indices[index + 2];
+                if (localIndex0 >= vertexCount || localIndex1 >= vertexCount || localIndex2 >= vertexCount) {
+                    std::cerr << "Primitive contains an index " "outside its vertex range\n";
                     return false;
                 }
 
@@ -758,14 +714,7 @@ namespace
             return false;
         }
 
-        outputMesh =
-            scene.addMesh(
-                std::move(vertices),
-                std::move(triangles),
-                allPrimitivesHaveNormals,
-                allPrimitivesHaveTexCoords
-            );
-
+        outputMesh = scene.addMesh(std::move(vertices), std::move(triangles), std::move(meshMaterials), allPrimitivesHaveNormals, allPrimitivesHaveTexCoords);
         return true;
     }
 }
@@ -918,7 +867,8 @@ bool GltfLoader::Load(
                     return;
                 }
                 const glm::mat4 objectToWorld = rootTransform * ToGlmMatrix(nodeTransform);
-                scene.addMeshInstance(meshMap[gltfMeshIndex], objectToWorld);
+                const MeshId meshId = meshMap[gltfMeshIndex];
+                scene.addMeshInstance(meshId, objectToWorld);
                 ++instanceCount;
             });
     } else {
@@ -928,8 +878,8 @@ bool GltfLoader::Load(
          * remain loadable.
          */
         std::cerr << "glTF has no scene; creating one identity " "instance per mesh\n";
-        for (const MeshId mesh : meshMap) {
-            scene.addMeshInstance(mesh, rootTransform);
+        for (const MeshId meshId : meshMap) {
+            scene.addMeshInstance(meshId, rootTransform);
             ++instanceCount;
         }
     }
