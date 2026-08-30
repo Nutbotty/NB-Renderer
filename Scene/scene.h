@@ -132,6 +132,7 @@ struct SceneMeshTriangle {
 struct SceneMesh {
     std::vector<SceneMeshVertex> vertices;
     std::vector<SceneMeshTriangle> triangles;
+    std::vector<MaterialId> materials;
     glm::vec3 boundsMin{0.0f};
     glm::vec3 boundsMax{0.0f};
     bool hasNormals = false;
@@ -141,7 +142,7 @@ struct SceneMeshInstance {
     MeshId mesh = 0;
     glm::mat4 objectToWorld{1.0f};
     SceneTransform transform;
-    MaterialId materialOverride = InvalidMaterialId;
+    std::vector<MaterialId> materials;
 };
 
 //camera
@@ -252,7 +253,7 @@ public:
         return id;
     }
 
-    MeshId addMesh(std::vector<SceneMeshVertex> vertices, std::vector<SceneMeshTriangle> triangles, bool hasNormals, bool hasTexCoords) {
+    MeshId addMesh(std::vector<SceneMeshVertex> vertices, std::vector<SceneMeshTriangle> triangles, std::vector<MaterialId> materials, bool hasNormals, bool hasTexCoords) {
         glm::vec3 boundsMin = vertices.front().position;
         glm::vec3 boundsMax = vertices.front().position;
 
@@ -266,6 +267,7 @@ public:
         SceneMesh mesh;
         mesh.vertices = std::move(vertices);
         mesh.triangles = std::move(triangles);
+        mesh.materials = std::move(materials);
         mesh.boundsMin = boundsMin;
         mesh.boundsMax = boundsMax;
         mesh.hasNormals = hasNormals;
@@ -275,8 +277,12 @@ public:
         return id;
     }
     MeshInstanceId addMeshInstance(MeshId mesh, const glm::mat4& objectToWorld) {
-        const MeshInstanceId id = static_cast<MeshInstanceId>(m_MeshInstances.size());
-        m_MeshInstances.push_back(SceneMeshInstance{mesh, objectToWorld});
+        const auto id = static_cast<MeshInstanceId>(m_MeshInstances.size());
+        SceneMeshInstance instance;
+        instance.mesh = mesh;
+        instance.objectToWorld = objectToWorld;
+        instance.materials = m_Meshes[static_cast<std::size_t>(mesh)].materials;
+        m_MeshInstances.push_back(std::move(instance));
         MarkDirty();
         return id;
     }
