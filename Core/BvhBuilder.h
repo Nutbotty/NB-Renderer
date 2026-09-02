@@ -63,7 +63,7 @@ struct alignas(16) GpuMeshVertex {
     glm::vec4 TexCoord;
 };
 struct alignas(16) GpuMeshTriangle {
-    //xyz tri indices, w = material
+    //xyz tri indices, w = mesh local material slot index
     glm::ivec4 MetaData{0};
 };
 struct alignas(16) GpuMesh {
@@ -81,6 +81,7 @@ struct alignas(16) GpuTransform {
 };
 
 // x = primitive type, y = index of primitive buffer (per shape), z = transform buffer index
+// w = material slot buffer for mesh, -1 for other primitives
 struct alignas(16) GpuPrimitiveRef {
     glm::ivec4 Metadata{0};
 };
@@ -99,6 +100,9 @@ struct BvhBuildResult {
 
     std::vector<GpuBvhNode> TlasNodes;
     std::vector<GpuBvhNode> BlasNodes;
+
+    std::vector<std::int32_t> InstanceMaterials;
+    std::vector<std::uint32_t> MeshInstanceMaterialOffsets;
 };
 
 class Scene;
