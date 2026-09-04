@@ -185,15 +185,13 @@ void EditorLayer::DrawScenePanel(Scene& scene, Renderer& renderer) {
     ImGui::End();
 }
 
-void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer)
-{
+void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
     if (!ImGui::Begin("Objects", &m_ShowObjectPanel)) {
         ImGui::End();
         return;
     }
 
     auto& instances = scene.GetMeshInstances();
-
     if (instances.empty()) {
         ImGui::TextDisabled("No objects in scene.");
         ImGui::End();
@@ -219,52 +217,61 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer)
     ImGui::Separator();
     SceneMeshInstance& instance = instances[m_SelectedObject];
     bool instanceChanged = false;
-
-
     bool materialChanged = false;
-
 
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
         instanceChanged |= ImGui::DragFloat3("Position", &instance.transform.Position.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
         instanceChanged |= ImGui::DragFloat3("Rotation", &instance.transform.Rotation.x, 0.5f, -360.0f, 360.0f, "%.1f deg");
         instanceChanged |= ImGui::DragFloat3("Scale", &instance.transform.Scale.x, 0.01f, 0.001f, 1000.0f, "%.3f");
     }
-    if (ImGui::CollapsingHeader("Material", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto& materials = scene.GetMaterials();
+        const auto& meshes = scene.GetMeshes();
+        const SceneMesh& mesh = meshes.at(static_cast<std::size_t>(instance.mesh));
+
+    if (instance.materials.size() != mesh.materials.size()) {
+        instance.materials = mesh.materials;
+        materialChanged = true;
+    }
+    for (std::size_t slot = 0; slot < instance.materials.size(); ++slot) {
+        ImGui::PushID(static_cast<int>(slot));
+        MaterialId& assignedMaterial = instance.materials[slot];
+
         std::string preview;
-    if (ImGui::BeginCombo("Override", preview.c_str())) {
-        const bool useMeshMaterials = instance.materialOverride == InvalidMaterialId;
-        if (ImGui::Selectable("Use Mesh Materials", useMeshMaterials)) {
-            instance.materialOverride = InvalidMaterialId;
-            instanceChanged = true;
+        if (assignedMaterial < materials.size()) {
+            preview = "Material " + std::to_string(static_cast<std::size_t>(assignedMaterial));
+        } else {
+            preview = "Invalid Material";
+        }
 
+        const std::string slotLabel = "Slot " + std::to_string(slot);
+        if (ImGui::BeginCombo(slotLabel.c_str(), preview.c_str())) {
+            for (std::size_t materialIndex = 0; materialIndex < materials.size(); ++materialIndex) {
+                const MaterialId materialId = static_cast<MaterialId>(materialIndex);
+                const bool selected = assignedMaterial == materialId;
+                const std::string materialLabel = "Material " + std::to_string(materialIndex);
+                if (ImGui::Selectable(materialLabel.c_str(), selected)) {
+                    assignedMaterial = materialId;
+                    materialChanged = true;
+                }
+                if (selected) {
+                    ImGui::SetItemDefaultFocus();
+                }
+            }
+            ImGui::EndCombo();
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button("Reset")) {
+            assignedMaterial = mesh.materials[slot];
             materialChanged = true;
-
         }
-        ImGui::Separator();
-        for (std::size_t i = 0; i < materials.size(); ++i) {
-            const MaterialId id = static_cast<MaterialId>(i);
-            const bool selected = instance.materialOverride == id;
-            const std::string label = "Material " + std::to_string(i);
-            if (ImGui::Selectable(label.c_str(), selected)) {
-                instance.materialOverride =  id;
-                instanceChanged = true;
-
-                materialChanged = true;
-
-            }
-            if (selected) {
-                ImGui::SetItemDefaultFocus();
-            }
-        }
-        ImGui::EndCombo();
+        ImGui::PopID();
     }
-    }
-
-
+}
 
     if (materialChanged) {
-        renderer.SetScene(scene);
+        renderer.UpdateObjectMaterials(scene, m_SelectedObject);
     }
     if (instanceChanged) {
     }
