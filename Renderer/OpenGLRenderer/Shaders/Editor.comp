@@ -61,7 +61,7 @@ struct PackedPrimitiveRef {
  * x = primitive type
  * y = primitive index
  * z = transform-buffer index
- * w = mat override, -1 = default
+ * w = instance mat bufer offset, -1 = non mesh
  */
     ivec4 metadata;
 };
@@ -72,7 +72,7 @@ struct PackedMeshVertex {
 };
 struct PackedMeshTriangle {
 /*
- * x = v0, y = v1, z = v2, w = mat
+ * x = v0, y = v1, z = v2, w = object local mat slot index
  */
     ivec4 metadata;
 };
@@ -126,6 +126,9 @@ layout(std430, binding = 10) readonly buffer MeshBuffer {
 };
 layout(std430, binding = 11) readonly buffer BlasNodeBuffer {
     PackedBvhNode blasNodeBuffer[];
+};
+layout(std430, binding = 12) readonly buffer InstanceMaterialBuffer {
+    int instanceMaterialBuffer[];
 };
 
 uniform int uTlasNodeCount;
