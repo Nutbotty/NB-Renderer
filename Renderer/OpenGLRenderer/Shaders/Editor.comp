@@ -191,23 +191,23 @@ Ray transformRay(mat4 transform, Ray ray) {
 }
 
 Material loadMaterial(int index) {
-    PackedMaterial packed = materialBuffer[index];
+    PackedMaterial gpuMaterial = materialBuffer[index];
     Material material;
-    material.type = packed.metadata.x;
+    material.type = gpuMaterial.metadata.x;
 
-    material.albedo = packed.baseColor.rgb;
-    material.opacity = packed.baseColor.a;
+    material.albedo = gpuMaterial.baseColor.rgb;
+    material.opacity = gpuMaterial.baseColor.a;
 
-    material.metallic = packed.surface.x;
-    material.roughness = packed.surface.y;
-    material.refractionIndex = packed.surface.z;
-    material.transmission = packed.surface.w;
+    material.metallic = gpuMaterial.surface.x;
+    material.roughness = gpuMaterial.surface.y;
+    material.refractionIndex = gpuMaterial.surface.z;
+    material.transmission = gpuMaterial.surface.w;
 
-    material.emission = packed.emission.xyz;
-    material.emissionStrength = packed.emission.w;
+    material.emission = gpuMaterial.emission.xyz;
+    material.emissionStrength = gpuMaterial.emission.w;
 
-    material.baseColorTexture = packed.textureIndices.x;
-    material.metallicRoughnessTexture = packed.textureIndices.y;
+    material.baseColorTexture = gpuMaterial.textureIndices.x;
+    material.metallicRoughnessTexture = gpuMaterial.textureIndices.y;
     return material;
 }
 
@@ -468,11 +468,11 @@ vec3 rayAt(Ray r, float t) {
 }
 
 Sphere loadSphere(int index) {
-    PackedSphere packed = sphereBuffer[index];
+    PackedSphere gpuSphere = sphereBuffer[index];
     Sphere sphere;
-    sphere.center = packed.centerRadius.xyz;
-    sphere.radius = packed.centerRadius.w;
-    sphere.material = packed.metadata.x;
+    sphere.center = gpuSphere.centerRadius.xyz;
+    sphere.radius = gpuSphere.centerRadius.w;
+    sphere.material = gpuSphere.metadata.x;
     return sphere;
 }
 //todo fix hitsphere to use buffer
@@ -719,15 +719,15 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     int primitiveType = primitiveRef.metadata.x;
     int primitiveIndex = primitiveRef.metadata.y;
     int transformIndex = primitiveRef.metadata.z;
-    int materialOverride = primitiveRef.metadata.w;
-    if (materialOverride >= 0) {
-        record.material = materialOverride;
-    }
+    int materialOffset = primitiveRef.metadata.w;
+
     if (transformIndex == 0) {
-        if (hitLocalPrimitive(primitiveType, primitiveIndex, r, rT,record)) {
-            if (materialOverride >= 0) {
-                record.material = materialOverride;
-            }
+        if (!hitLocalPrimitive(primitiveType, primitiveIndex, r, rT, record)) {
+            return false;
+        }
+        if (primitiveType == PRIMITIVE_MESH) {
+            int materialSlot = record.material;
+            record.material = instanceMaterialBuffer[materialOffset + materialSlot];
         }
         return true;
     }
@@ -748,8 +748,16 @@ bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray r, Interval rT, out HitRe
     vec3 worldOutwardNormal = normalize(normalToWorld * localOutwardNormal);
     setFaceNormal(r, worldOutwardNormal, record);
 
-    if (materialOverride >= 0) {
-        record.material = materialOverride;
+    if (primitiveType == PRIMITIVE_MESH) {
+        int materialSlot = record.material;
+        int materialIndex =
+        materialOffset + materialSlot;
+        if (materialOffset < 0 || materialSlot < 0 || materialIndex < 0 ||
+            materialIndex >= instanceMaterialBuffer.length()) {
+            record.material = 0;
+        } else {
+            record.material = instanceMaterialBuffer[materialIndex];
+        }
     }
     return true;
 }
