@@ -216,13 +216,13 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
     }
     ImGui::Separator();
     SceneMeshInstance& instance = instances[m_SelectedObject];
-    bool instanceChanged = false;
-    bool materialChanged = false;
+    bool selectedInstanceChanged = false;
+    bool selectedMaterialChanged = false;
 
     if (ImGui::CollapsingHeader("Transform", ImGuiTreeNodeFlags_DefaultOpen)) {
-        instanceChanged |= ImGui::DragFloat3("Position", &instance.transform.Position.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
-        instanceChanged |= ImGui::DragFloat3("Rotation", &instance.transform.Rotation.x, 0.5f, -360.0f, 360.0f, "%.1f deg");
-        instanceChanged |= ImGui::DragFloat3("Scale", &instance.transform.Scale.x, 0.01f, 0.001f, 1000.0f, "%.3f");
+        selectedInstanceChanged |= ImGui::DragFloat3("Position", &instance.transform.Position.x, 0.05f, -10000.0f, 10000.0f, "%.3f");
+        selectedInstanceChanged |= ImGui::DragFloat3("Rotation", &instance.transform.Rotation.x, 0.5f, -360.0f, 360.0f, "%.1f deg");
+        selectedInstanceChanged |= ImGui::DragFloat3("Scale", &instance.transform.Scale.x, 0.01f, 0.001f, 1000.0f, "%.3f");
     }
     if (ImGui::CollapsingHeader("Materials", ImGuiTreeNodeFlags_DefaultOpen)) {
         auto& materials = scene.GetMaterials();
@@ -231,7 +231,7 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
 
     if (instance.materials.size() != mesh.materials.size()) {
         instance.materials = mesh.materials;
-        materialChanged = true;
+        selectedMaterialChanged = true;
     }
     for (std::size_t slot = 0; slot < instance.materials.size(); ++slot) {
         ImGui::PushID(static_cast<int>(slot));
@@ -252,7 +252,7 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
                 const std::string materialLabel = "Material " + std::to_string(materialIndex);
                 if (ImGui::Selectable(materialLabel.c_str(), selected)) {
                     assignedMaterial = materialId;
-                    materialChanged = true;
+                    selectedMaterialChanged = true;
                 }
                 if (selected) {
                     ImGui::SetItemDefaultFocus();
@@ -264,16 +264,16 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
         ImGui::SameLine();
         if (ImGui::Button("Reset")) {
             assignedMaterial = mesh.materials[slot];
-            materialChanged = true;
+            selectedMaterialChanged = true;
         }
         ImGui::PopID();
     }
 }
 
-    if (materialChanged) {
+    if (selectedMaterialChanged) {
         renderer.UpdateObjectMaterials(scene, m_SelectedObject);
     }
-    if (instanceChanged) {
+    if (selectedInstanceChanged) {
     }
 
     ImGui::End();
