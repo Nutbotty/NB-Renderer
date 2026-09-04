@@ -71,6 +71,7 @@ private:
 
     //Scene buffers
     unsigned int m_MaterialBuffer = 0;
+    unsigned int m_InstanceMaterialBuffer = 0;
     unsigned int m_SphereBuffer = 0;
     unsigned int m_TlasBuffer = 0;
     unsigned int m_QuadBuffer = 0;
@@ -81,7 +82,7 @@ private:
     unsigned int m_MeshTriangleBuffer = 0;
     unsigned int m_MeshBuffer = 0;
     unsigned int m_BlasBuffer = 0;
-
+    
     unsigned int m_EnvironmentTexture = 0;
     GLuint m_BaseColorTextureArray = 0;
     GLuint m_MetalRoughTextureArray = 0;

@@ -22,6 +22,7 @@ namespace {
     constexpr GLuint MeshTriangleBufferBinding = 9;
     constexpr GLuint MeshBufferBinding = 10;
     constexpr GLuint BlasBufferBinding = 11;
+    constexpr GLuint InstanceMaterialBufferBinding = 12;
 
     constexpr GLint EnvironmentTextureUnit = 1;
     constexpr GLint BaseColorTextureUnit = 2;
@@ -151,6 +152,8 @@ void OpenGLRenderer::UploadScene(const Scene& scene) {
         m_GpuScene.Meshes.data(), m_GpuScene.Meshes.size() * sizeof(GpuMesh));
     m_BlasBuffer = CreateStorageBuffer(BlasBufferBinding,
         m_GpuScene.BlasNodes.data(), m_GpuScene.BlasNodes.size() * sizeof(GpuBvhNode));
+    m_InstanceMaterialBuffer = CreateStorageBuffer(InstanceMaterialBufferBinding, m_GpuScene.InstanceMaterials.data(),
+        static_cast<GLsizeiptr>(m_GpuScene.InstanceMaterials.size() * sizeof(std::int32_t)));
 }
 
 void OpenGLRenderer::UploadEnvironment(const Scene& scene) {
@@ -327,6 +330,7 @@ void OpenGLRenderer::BindSceneBuffers() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshTriangleBufferBinding, m_MeshTriangleBuffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshBufferBinding, m_MeshBuffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BlasBufferBinding, m_BlasBuffer);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceMaterialBufferBinding, m_InstanceMaterialBuffer);
 }
 
 void OpenGLRenderer::SetCameraUniforms(const EditorCamera& camera) {
@@ -383,6 +387,8 @@ void OpenGLRenderer::DestroySceneResources() {
         glDeleteBuffers(1, &m_MeshBuffer);
     if (m_BlasBuffer)
         glDeleteBuffers(1, &m_BlasBuffer);
+    if (m_InstanceMaterialBuffer)
+        glDeleteBuffers(1, &m_InstanceMaterialBuffer);
     if (m_EnvironmentTexture)
         glDeleteTextures(1, &m_EnvironmentTexture);
     if (m_BaseColorTextureArray)
@@ -400,6 +406,7 @@ void OpenGLRenderer::DestroySceneResources() {
     m_MeshTriangleBuffer = 0;
     m_MeshBuffer = 0;
     m_BlasBuffer = 0;
+    m_InstanceMaterialBuffer = 0;
     m_EnvironmentTexture = 0;
     m_BaseColorTextureArray = 0;
     m_MetalRoughTextureArray = 0;
