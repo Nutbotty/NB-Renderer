@@ -177,8 +177,27 @@ void OpenGLRenderer::UpdateMaterials(const Scene& scene) {
     ResetAccumulation();
 }
 
-void OpenGLRenderer::UpdateObjectMaterials(const Scene &scene, std::size_t objectIndex) {
+void OpenGLRenderer::UpdateObjectMaterials(const Scene& scene, std::size_t objectIndex) {
+    const auto& instances = scene.GetMeshInstances();
+    const SceneMeshInstance& instance = instances[objectIndex];
+    const SceneMesh& mesh = scene.GetMeshes().at(static_cast<std::size_t>(instance.mesh));
+    const std::uint32_t materialOffset = m_GpuScene.MeshInstanceMaterialOffsets[objectIndex];
 
+    std::vector<std::int32_t> gpuMaterials;
+    gpuMaterials.reserve(instance.materials.size());
+    for (const MaterialId material : instance.materials) {
+        gpuMaterials.push_back(static_cast<std::int32_t>(material));
+    }
+    if (!gpuMaterials.empty()) {
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_InstanceMaterialBuffer);
+        glBufferSubData(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(materialOffset * sizeof(std::int32_t)),
+            static_cast<GLsizeiptr>(gpuMaterials.size() * sizeof(std::int32_t)), gpuMaterials.data());
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    }
+    for (std::size_t slot = 0; slot < gpuMaterials.size(); ++slot) {
+        m_GpuScene.InstanceMaterials[materialOffset + slot] = gpuMaterials[slot];
+    }
+    ResetAccumulation();
 }
 
 void OpenGLRenderer::UploadMaterialTextures(const Scene& scene) {
