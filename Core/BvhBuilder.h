@@ -86,6 +86,11 @@ struct alignas(16) GpuPrimitiveRef {
     glm::ivec4 Metadata{0};
 };
 
+struct BvhPrimitiveBounds {
+    glm::vec3 Min{0.0f};
+    glm::vec3 Max{0.0f};
+};
+
 struct BvhBuildResult {
     std::vector<GpuSphere> Spheres;
     std::vector<GpuQuad> Quads;
@@ -103,6 +108,10 @@ struct BvhBuildResult {
 
     std::vector<std::int32_t> InstanceMaterials;
     std::vector<std::uint32_t> MeshInstanceMaterialOffsets;
+
+    // for TLAS refresh
+    std::vector<BvhPrimitiveBounds> PrimitiveBounds;
+    std::vector<std::uint32_t> MeshInstancePrimitiveRefs;
 };
 
 class Scene;
@@ -111,6 +120,8 @@ class BvhBuilder {
 public:
     [[nodiscard]] static BvhBuildResult Build(
         const Scene &scene, std::uint32_t tlasLeafSize = 8, std::uint32_t blasLeafSize = 4);
+    static void RefitMeshIntance(const Scene& scene, std::size_t meshInstanceIndex, BvhBuildResult& result);
+
 };
 
 #endif //NB_RENDERER_BVHBUILDER_H
