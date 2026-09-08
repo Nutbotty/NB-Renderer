@@ -200,6 +200,10 @@ void OpenGLRenderer::UpdateObjectMaterials(const Scene& scene, std::size_t objec
     ResetAccumulation();
 }
 
+void OpenGLRenderer::UpdateObjectTransform(const Scene &scene, std::size_t objectIndex) {
+
+}
+
 void OpenGLRenderer::UploadMaterialTextures(const Scene& scene) {
     const auto& textures = scene.GetTextures();
     m_BaseColorLayerByTexture.assign(textures.size(), -1);

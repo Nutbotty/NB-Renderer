@@ -24,6 +24,7 @@ public:
     void SetScene(const Scene& scene) override;
     void UpdateMaterials(const Scene &scene) override;
     void UpdateObjectMaterials(const Scene &scene, std::size_t objectIndex) override;
+    void UpdateObjectTransform(const Scene &scene, std::size_t objectIndex) override;
     void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) override;
     void ResetAccumulation() override;
 
