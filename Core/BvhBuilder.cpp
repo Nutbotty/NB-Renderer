@@ -485,7 +485,16 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
 
 void BvhBuilder::RefitMeshIntance(const Scene &scene, std::size_t meshInstanceIndex, BvhBuildResult &result) {
     const auto& instances = scene.GetMeshInstances();
+    if (meshInstanceIndex >= instances.size()) {
+        throw std::out_of_range("Invalid mesh instance index");
+    }
+    if (meshInstanceIndex >= result.MeshInstancePrimitiveRefs.size()) {
+        throw std::out_of_range("Mesh instance has no TLAS mapping");
+    }
     const std::uint32_t primitiveRefIndex = result.MeshInstancePrimitiveRefs[meshInstanceIndex];
+    if (primitiveRefIndex >= result.PrimitiveRefs.size()) {
+        throw std::runtime_error("Invalid mesh instance primitive-ref mapping");
+    }
 
     GpuPrimitiveRef& primitiveRef = result.PrimitiveRefs[primitiveRefIndex];
     const auto transformIndex = static_cast<std::uint32_t>(primitiveRef.Metadata.z);
