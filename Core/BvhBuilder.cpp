@@ -36,6 +36,7 @@ namespace {
         std::uint32_t PrimitiveIndex = 0;
         std::uint32_t TransformIndex = 0;
         std::int32_t MaterialOffset = -1;
+        std::uint32_t MeshInstanceIndex = std::numeric_limits<std::uint32_t>::max();
         Bounds BoundingBox;
         glm::vec3 Centroid{0.0, 0.0, 0.0};
     };
@@ -393,17 +394,14 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
 
     const auto& meshInstances = scene.GetMeshInstances();
     result.MeshInstanceMaterialOffsets.reserve(meshInstances.size());
-    for (const SceneMeshInstance& meshInstance : meshInstances) {
+    for (std::uint32_t meshInstanceIndex = 0; meshInstanceIndex < meshInstances.size(); ++meshInstanceIndex) {
+        const SceneMeshInstance& meshInstance = meshInstances[meshInstanceIndex];
         const auto transformIndex = static_cast<std::uint32_t>(result.Transforms.size());
         GpuTransform gpuTransform;
         gpuTransform.ObjectToWorld = meshInstance.objectToWorld;
         gpuTransform.WorldToObject = glm::inverse(meshInstance.objectToWorld);
         result.Transforms.push_back(gpuTransform);
-
-        const SceneMesh& mesh = sceneMeshes[meshInstance.mesh];
-        Bounds localBounds;
-        localBounds.Min = mesh.boundsMin;
-        localBounds.Max = mesh.boundsMax;
+        const SceneMesh& mesh = sceneMeshes.at(meshInstance.mesh);
 
         const std::uint32_t materialOffset = static_cast<std::uint32_t>(result.InstanceMaterials.size());
         result.MeshInstanceMaterialOffsets.push_back(materialOffset);
@@ -411,10 +409,15 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
             result.InstanceMaterials.push_back(static_cast<std::int32_t>(material));
         }
 
+        Bounds localBounds;
+        localBounds.Min = mesh.boundsMin;
+        localBounds.Max = mesh.boundsMax;
+
         PrimitiveReference reference;
         reference.Type = GpuPrimitiveType::Mesh;
         reference.PrimitiveIndex = meshInstance.mesh;
         reference.TransformIndex = transformIndex;
+        reference.MeshInstanceIndex = meshInstanceIndex;
         reference.MaterialOffset = static_cast<std::int32_t>(materialOffset);
         reference.BoundingBox = TransformBounds(localBounds, meshInstance.objectToWorld);
         const glm::vec3 localCentroid = 0.5f * (mesh.boundsMin + mesh.boundsMax);
@@ -430,9 +433,13 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
     const std::uint32_t rootNode = BuildBvhNode(references, result.TlasNodes, 0,
         static_cast<std::uint32_t>(references.size()), tlasLeafSize);
     assert(rootNode == 0);
-    result.PrimitiveRefs.reserve(references.size());
 
-    for (const PrimitiveReference& reference :references) {
+
+    result.MeshInstancePrimitiveRefs.assign(meshInstances.size(), std::numeric_limits<std::uint32_t>::max());
+    result.PrimitiveBounds.reserve(references.size());
+    result.PrimitiveRefs.reserve(references.size());
+    for (std::uint32_t referenceIndex = 0; referenceIndex < references.size(); ++referenceIndex) {
+        const PrimitiveReference& reference = references[referenceIndex];
         GpuPrimitiveRef gpuReference;
         gpuReference.Metadata = glm::ivec4(
             static_cast<int>(reference.Type),
@@ -440,6 +447,11 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
             static_cast<int>(reference.TransformIndex),
             reference.MaterialOffset);
         result.PrimitiveRefs.push_back(gpuReference);
+
+        result.PrimitiveBounds.push_back({reference.BoundingBox.Min, reference.BoundingBox.Max});
+        if (reference.MeshInstanceIndex != std::numeric_limits<std::uint32_t>::max()) {
+            result.MeshInstancePrimitiveRefs[reference.MeshInstanceIndex] = referenceIndex;
+        }
     }
     return result;
 }
