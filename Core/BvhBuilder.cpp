@@ -264,7 +264,7 @@ namespace {
         return nodeIndex;
     }
 
-    void refitTLAS(BvhBuildResult& result) {
+    void RefitTLAS(BvhBuildResult& result) {
         if (result.TlasNodes.empty()) return;
 
         for (std::size_t i = result.TlasNodes.size(); i > 0; i--) {
@@ -502,5 +502,5 @@ void BvhBuilder::RefitMeshIntance(const Scene &scene, std::size_t meshInstanceIn
     const Bounds worldBounds = TransformBounds(localBounds, instance.objectToWorld);
     result.PrimitiveBounds[primitiveRefIndex] = {worldBounds.Min, worldBounds.Max};
 
-    refitTLAS(result);
+    RefitTLAS(result);
 }
