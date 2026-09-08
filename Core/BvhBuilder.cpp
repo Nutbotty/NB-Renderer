@@ -484,5 +484,23 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
 }
 
 void BvhBuilder::RefitMeshIntance(const Scene &scene, std::size_t meshInstanceIndex, BvhBuildResult &result) {
+    const auto& instances = scene.GetMeshInstances();
+    const std::uint32_t primitiveRefIndex = result.MeshInstancePrimitiveRefs[meshInstanceIndex];
 
+    GpuPrimitiveRef& primitiveRef = result.PrimitiveRefs[primitiveRefIndex];
+    const auto transformIndex = static_cast<std::uint32_t>(primitiveRef.Metadata.z);
+    const SceneMeshInstance& instance = instances[meshInstanceIndex];
+    const SceneMesh& mesh = scene.GetMeshes().at(instance.mesh);
+
+    GpuTransform& gpuTransform = result.Transforms.at(transformIndex);
+    gpuTransform.ObjectToWorld = instance.objectToWorld;
+    gpuTransform.WorldToObject = glm::inverse(instance.objectToWorld);
+
+    Bounds localBounds;
+    localBounds.Min = mesh.boundsMin;
+    localBounds.Max = mesh.boundsMax;
+    const Bounds worldBounds = TransformBounds(localBounds, instance.objectToWorld);
+    result.PrimitiveBounds[primitiveRefIndex] = {worldBounds.Min, worldBounds.Max};
+
+    refitTLAS(result);
 }
