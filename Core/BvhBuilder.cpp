@@ -263,6 +263,33 @@ namespace {
         node.Metadata = glm::ivec4(static_cast<int>(leftChild), static_cast<int>(rightChild), 0, 0);
         return nodeIndex;
     }
+
+    void refitTLAS(BvhBuildResult& result) {
+        if (result.TlasNodes.empty()) return;
+
+        for (std::size_t i = result.TlasNodes.size(); i > 0; i--) {
+            GpuBvhNode& node = result.TlasNodes[i];
+            const bool isLeaf = node.Metadata.z == 1;
+            if (isLeaf) {
+                const auto first = static_cast<std::uint32_t>(node.Metadata.x);
+                const auto count = static_cast<std::uint32_t>(node.Metadata.y);
+
+                Bounds bounds;
+                for (std::uint32_t j = 0; j < count; ++j) {
+                    const BvhPrimitiveBounds& primitiveBounds = result.PrimitiveBounds[first + j];
+                    bounds.Expand(primitiveBounds.Min);
+                    bounds.Expand(primitiveBounds.Max);
+                }
+                node.BoundsMin = glm::vec4(bounds.Min, 0.0f);
+                node.BoundsMax = glm::vec4(bounds.Max, 0.0f);
+            } else {
+                const auto left = static_cast<std::uint32_t>(node.Metadata.x);
+                const auto right = static_cast<std::uint32_t>(node.Metadata.y);
+                node.BoundsMin = glm::min(result.TlasNodes[left].BoundsMin, result.TlasNodes[right].BoundsMin);
+                node.BoundsMax = glm::max(result.TlasNodes[left].BoundsMax, result.TlasNodes[right].BoundsMax);
+            }
+        }
+    }
 }
 
 BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize, std::uint32_t blasLeafSize) {
