@@ -482,3 +482,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
     }
     return result;
 }
+
+void BvhBuilder::RefitMeshIntance(const Scene &scene, std::size_t meshInstanceIndex, BvhBuildResult &result) {
+
+}
