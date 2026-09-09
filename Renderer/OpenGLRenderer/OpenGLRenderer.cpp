@@ -201,7 +201,7 @@ void OpenGLRenderer::UpdateObjectMaterials(const Scene& scene, std::size_t objec
 }
 
 void OpenGLRenderer::UpdateObjectTransform(const Scene &scene, std::size_t objectIndex) {
-    BvhBuilder::RefitMeshIntance(scene, objectIndex, m_GpuScene);
+    BvhBuilder::RefitMeshInstance(scene, objectIndex, m_GpuScene);
     const std::uint32_t primitiveRefIndex = m_GpuScene.MeshInstancePrimitiveRefs[objectIndex];
     const GpuPrimitiveRef& primitiveRef = m_GpuScene.PrimitiveRefs[primitiveRefIndex];
     const std::uint32_t transformIndex = static_cast<std::uint32_t>(primitiveRef.Metadata.z);
