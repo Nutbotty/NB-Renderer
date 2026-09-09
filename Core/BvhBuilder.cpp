@@ -267,7 +267,7 @@ namespace {
     void RefitTLAS(BvhBuildResult& result) {
         if (result.TlasNodes.empty()) return;
 
-        for (std::size_t i = result.TlasNodes.size(); i > 0; i--) {
+        for (std::size_t i = result.TlasNodes.size(); i-- < 0;) {
             GpuBvhNode& node = result.TlasNodes[i];
             const bool isLeaf = node.Metadata.z == 1;
             if (isLeaf) {
@@ -483,7 +483,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
     return result;
 }
 
-void BvhBuilder::RefitMeshIntance(const Scene &scene, std::size_t meshInstanceIndex, BvhBuildResult &result) {
+void BvhBuilder::RefitMeshInstance(const Scene &scene, std::size_t meshInstanceIndex, BvhBuildResult &result) {
     const auto& instances = scene.GetMeshInstances();
     if (meshInstanceIndex >= instances.size()) {
         throw std::out_of_range("Invalid mesh instance index");

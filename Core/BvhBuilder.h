@@ -120,7 +120,7 @@ class BvhBuilder {
 public:
     [[nodiscard]] static BvhBuildResult Build(
         const Scene &scene, std::uint32_t tlasLeafSize = 8, std::uint32_t blasLeafSize = 4);
-    static void RefitMeshIntance(const Scene& scene, std::size_t meshInstanceIndex, BvhBuildResult& result);
+    static void RefitMeshInstance(const Scene& scene, std::size_t meshInstanceIndex, BvhBuildResult& result);
 
 };
 
