@@ -274,6 +274,8 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
         renderer.UpdateObjectMaterials(scene, m_SelectedObject);
     }
     if (selectedInstanceChanged) {
+        instance.objectToWorld = instance.transform.ToMatrix();
+        renderer.UpdateObjectTransform(scene, m_SelectedObject);
     }
 
     ImGui::End();
