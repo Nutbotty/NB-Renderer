@@ -201,7 +201,21 @@ void OpenGLRenderer::UpdateObjectMaterials(const Scene& scene, std::size_t objec
 }
 
 void OpenGLRenderer::UpdateObjectTransform(const Scene &scene, std::size_t objectIndex) {
+    BvhBuilder::RefitMeshIntance(scene, objectIndex, m_GpuScene);
+    const std::uint32_t primitiveRefIndex = m_GpuScene.MeshInstancePrimitiveRefs[objectIndex];
+    const GpuPrimitiveRef& primitiveRef = m_GpuScene.PrimitiveRefs[primitiveRefIndex];
+    const std::uint32_t transformIndex = static_cast<std::uint32_t>(primitiveRef.Metadata.z);
 
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_TransformBuffer);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, static_cast<GLintptr>(transformIndex *
+            sizeof(GpuTransform)), sizeof(GpuTransform), &m_GpuScene.Transforms[transformIndex]);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_TlasBuffer);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, static_cast<GLsizeiptr>(
+            m_GpuScene.TlasNodes.size() * sizeof(GpuBvhNode)), m_GpuScene.TlasNodes.data());
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    ResetAccumulation();
 }
 
 void OpenGLRenderer::UploadMaterialTextures(const Scene& scene) {
