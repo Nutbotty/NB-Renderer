@@ -74,7 +74,7 @@ struct SceneTransform {
     glm::vec3 Position{0.0f};
     glm::vec3 Rotation{0.0f}; // degrees
     glm::vec3 Scale{1.0f};
-    glm::mat4 ToMatrix() const {
+    [[nodiscard]] glm::mat4 ToMatrix() const {
         glm::mat4 matrix{1.0f};
         matrix = glm::translate(matrix, Position);
         matrix = glm::rotate(matrix, glm::radians(Rotation.x), glm::vec3(1.0f, 0.0f, 0.0f));
@@ -140,9 +140,20 @@ struct SceneMesh {
 };
 struct SceneMeshInstance {
     MeshId mesh = 0;
+    glm::mat4 baseObjectToWorld{1.0f};
     glm::mat4 objectToWorld{1.0f};
     SceneTransform transform;
     std::vector<MaterialId> materials;
+    void UpdateObjectToWorld() {
+        const glm::vec3 pivot = glm::vec3(baseObjectToWorld[3]);
+        glm::mat4 toPivot = glm::translate(glm::mat4(1.0f), pivot);
+        glm::mat4 fromPivot = glm::translate(glm::mat4(1.0f), -pivot);
+        objectToWorld = toPivot * transform.ToMatrix() * fromPivot * baseObjectToWorld;
+    }
+    void ResetTransform() {
+        transform = SceneTransform{};
+        objectToWorld = baseObjectToWorld;
+    }
 };
 
 //camera
@@ -160,22 +171,15 @@ public:
     Scene() = default;
 
     TextureId addTexture(SceneTexture texture) {
-        const TextureId id = static_cast<TextureId>(m_Textures.size());
+        const auto id = static_cast<TextureId>(m_Textures.size());
         m_Textures.push_back(std::move(texture));
         MarkDirty();
         return id;
     }
 
     MaterialId addMaterial(const SceneMaterial& material) {
-        const MaterialId id =
-            static_cast<MaterialId>(
-                m_Materials.size()
-            );
-
-        m_Materials.push_back(
-            material
-        );
-
+        const auto id = static_cast<MaterialId>(m_Materials.size());
+        m_Materials.push_back(material);
         return id;
     }
     MaterialId addMaterial(MaterialType type, const glm::vec3& albedo, float fuzz = 0.0f, float indexOfRefraction = 1.5f,
@@ -262,7 +266,7 @@ public:
             boundsMax = glm::max(boundsMax, vertex.position);
         }
 
-        const MeshId id = static_cast<MeshId>(m_Meshes.size());
+        const auto id = static_cast<MeshId>(m_Meshes.size());
 
         SceneMesh mesh;
         mesh.vertices = std::move(vertices);
@@ -280,7 +284,9 @@ public:
         const auto id = static_cast<MeshInstanceId>(m_MeshInstances.size());
         SceneMeshInstance instance;
         instance.mesh = mesh;
+        instance.baseObjectToWorld = objectToWorld;
         instance.objectToWorld = objectToWorld;
+        instance.transform = SceneTransform{};
         instance.materials = m_Meshes[static_cast<std::size_t>(mesh)].materials;
         m_MeshInstances.push_back(std::move(instance));
         MarkDirty();
