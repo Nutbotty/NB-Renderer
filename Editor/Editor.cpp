@@ -7,6 +7,8 @@
 #include "Editor.h"
 
 #include <cassert>
+#include <iostream>
+
 #include "ImGuiBackend.h"
 
 namespace {
@@ -274,7 +276,7 @@ void EditorLayer::DrawObjectPanel(Scene& scene, Renderer& renderer) {
         renderer.UpdateObjectMaterials(scene, m_SelectedObject);
     }
     if (selectedInstanceChanged) {
-        instance.objectToWorld = instance.transform.ToMatrix();
+        instance.UpdateObjectToWorld();
         renderer.UpdateObjectTransform(scene, m_SelectedObject);
     }
 
