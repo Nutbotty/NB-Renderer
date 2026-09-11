@@ -22,7 +22,7 @@ struct RenderSettings {
     RenderMode mode = RenderMode::Editor;
     std::uint32_t width = 1280;
     std::uint32_t height = 720;
-    std::uint32_t maxSamples = 2048;
+    std::uint32_t maxSamples = 24;
     bool useFinalShader = false;
 };
 
