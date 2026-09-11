@@ -267,7 +267,8 @@ namespace {
     void RefitTLAS(BvhBuildResult& result) {
         if (result.TlasNodes.empty()) return;
 
-        for (std::size_t i = result.TlasNodes.size(); i-- < 0;) {
+        for (std::size_t n = result.TlasNodes.size(); n > 0; --n) {
+            const std::size_t i = n - 1;
             GpuBvhNode& node = result.TlasNodes[i];
             const bool isLeaf = node.Metadata.z == 1;
             if (isLeaf) {
