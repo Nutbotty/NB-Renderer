@@ -353,208 +353,72 @@ void OpenGLRenderer::RenderFinal(const Scene& scene, const EditorCamera& camera,
     SaveRenderTexture(finalTexture, settings.width, settings.height, outputPath);
     glDeleteTextures(1, &finalTexture);
 }
-GLuint OpenGLRenderer::CreateRenderTexture(
-    std::uint32_t width,
-    std::uint32_t height)
-{
+GLuint OpenGLRenderer::CreateRenderTexture(std::uint32_t width, std::uint32_t height) {
     GLuint texture = 0;
-
-    glGenTextures(
-        1,
-        &texture);
-
-    glBindTexture(
-        GL_TEXTURE_2D,
-        texture);
-
-    glTexStorage2D(
-        GL_TEXTURE_2D,
-        1,
-        GL_RGBA32F,
-        static_cast<GLsizei>(width),
-        static_cast<GLsizei>(height));
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MIN_FILTER,
-        GL_LINEAR);
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_MAG_FILTER,
-        GL_LINEAR);
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_S,
-        GL_CLAMP_TO_EDGE);
-
-    glTexParameteri(
-        GL_TEXTURE_2D,
-        GL_TEXTURE_WRAP_T,
-        GL_CLAMP_TO_EDGE);
-
-    glBindTexture(
-        GL_TEXTURE_2D,
-        0);
-
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA32F, static_cast<GLsizei>(width), static_cast<GLsizei>(height));
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glBindTexture(GL_TEXTURE_2D, 0);
     return texture;
 }
-void OpenGLRenderer::SaveRenderTexture(
-    GLuint texture,
-    std::uint32_t width,
-    std::uint32_t height,
-    const std::filesystem::path& outputPath)
-{
-    std::vector<float> pixels(
-        static_cast<std::size_t>(width) *
-        static_cast<std::size_t>(height) *
-        4);
+void OpenGLRenderer::SaveRenderTexture(GLuint texture, std::uint32_t width,
+    std::uint32_t height, const std::filesystem::path& outputPath) {
+    std::vector<float> pixels(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_FLOAT, pixels.data());
+    glBindTexture(GL_TEXTURE_2D, 0);
+    std::vector<std::uint8_t> output(static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4);
 
-    glBindTexture(
-        GL_TEXTURE_2D,
-        texture);
+    for (std::uint32_t y = 0; y < height; ++y) {
+        const std::uint32_t sourceY = height - 1 - y;
+        for (std::uint32_t x = 0; x < width; ++x) {
+            const std::size_t src = (static_cast<std::size_t>(sourceY) * width + x) * 4;
+            const std::size_t dst = (static_cast<std::size_t>(y) * width + x) * 4;
 
-    glGetTexImage(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGBA,
-        GL_FLOAT,
-        pixels.data());
-
-    glBindTexture(
-        GL_TEXTURE_2D,
-        0);
-
-    std::vector<std::uint8_t> output(
-        static_cast<std::size_t>(width) *
-        static_cast<std::size_t>(height) *
-        4);
-
-    for (std::uint32_t y = 0;
-         y < height;
-         ++y)
-    {
-        // Flip OpenGL bottom-left origin
-        // into normal image top-left origin.
-        const std::uint32_t sourceY =
-            height - 1 - y;
-
-        for (std::uint32_t x = 0;
-             x < width;
-             ++x)
-        {
-            const std::size_t src =
-                (
-                    static_cast<std::size_t>(
-                        sourceY) *
-                    width +
-                    x
-                ) * 4;
-
-            const std::size_t dst =
-                (
-                    static_cast<std::size_t>(
-                        y) *
-                    width +
-                    x
-                ) * 4;
-
-            glm::vec3 color(
-                pixels[src + 0],
-                pixels[src + 1],
-                pixels[src + 2]);
-
+            glm::vec3 color(pixels[src + 0], pixels[src + 1], pixels[src + 2]);
             //
             // Simple Reinhard tone map.
             //
-            color =
-                color /
-                (color + glm::vec3(1.0f));
+            // color = color / (color + glm::vec3(1.0f));
 
             //
             // Linear -> display gamma.
             //
-            color =
-                glm::pow(
-                    glm::max(
-                        color,
-                        glm::vec3(0.0f)),
-                    glm::vec3(
-                        1.0f / 2.2f));
+            // color = glm::pow(glm::max(color, glm::vec3(0.0f)), glm::vec3( 1.0f / 2.2f));
+            color = glm::clamp(color, glm::vec3(0.0f),glm::vec3(1.0f));
 
-            color =
-                glm::clamp(
-                    color,
-                    glm::vec3(0.0f),
-                    glm::vec3(1.0f));
-
-            output[dst + 0] =
-                static_cast<std::uint8_t>(
-                    color.r * 255.0f);
-
-            output[dst + 1] =
-                static_cast<std::uint8_t>(
-                    color.g * 255.0f);
-
-            output[dst + 2] =
-                static_cast<std::uint8_t>(
-                    color.b * 255.0f);
-
-            output[dst + 3] =
-                255;
+            output[dst + 0] = static_cast<std::uint8_t>(color.r * 255.0f);
+            output[dst + 1] = static_cast<std::uint8_t>(color.g * 255.0f);
+            output[dst + 2] = static_cast<std::uint8_t>(color.b * 255.0f);
+            output[dst + 3] = 255;
         }
     }
 
     std::filesystem::path finalPath =
     std::filesystem::absolute(outputPath);
-
     if (!finalPath.parent_path().empty()) {
         std::filesystem::create_directories(
             finalPath.parent_path());
     }
+    std::cerr << "Saving final render to: " << finalPath << '\n';
 
-    std::cerr
-        << "Saving final render to: "
-        << finalPath
-        << '\n';
-
-    std::ofstream file(
-        finalPath,
-        std::ios::binary);
-
+    std::ofstream file(finalPath, std::ios::binary);
     if (!file.is_open()) {
-        throw std::runtime_error(
-            "Could not open final render file: " +
-            finalPath.string());
+        throw std::runtime_error("Could not open final render file: " + finalPath.string());
     }
-
-    auto writeCallback =
-        [](void* context, void* data, int size)
-        {
-            auto* stream =
-                static_cast<std::ofstream*>(context);
-
-            stream->write(
-                static_cast<const char*>(data),
-                size);
+    auto writeCallback = [](void* context, void* data, int size) {
+            auto* stream = static_cast<std::ofstream*>(context);
+            stream->write(static_cast<const char*>(data),size);
         };
-
-    const int success =
-        stbi_write_png_to_func(
-            writeCallback,
-            &file,
-            static_cast<int>(width),
-            static_cast<int>(height),
-            4,
-            output.data(),
-            static_cast<int>(width * 4));
-
+    const int success = stbi_write_png_to_func(writeCallback, &file, static_cast<int>(width),
+            static_cast<int>(height), 4, output.data(), static_cast<int>(width * 4));
     file.close();
-
     if (success == 0) {
-        throw std::runtime_error(
-            "stb failed to encode final render");
+        throw std::runtime_error("stb failed to encode final render");
     }
 }
 
