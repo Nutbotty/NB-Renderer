@@ -5,6 +5,7 @@
 #ifndef NB_RENDERER_RENDERER_H
 #define NB_RENDERER_RENDERER_H
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include "../Core/Window.h"
 #include "../Editor/editorcamera.h"
@@ -23,6 +24,7 @@ struct RenderSettings {
     std::uint32_t width = 1280;
     std::uint32_t height = 720;
     std::uint32_t maxSamples = 24;
+    std::uint32_t samplesPerDispatch = 1;
     std::uint32_t maxDepth = 4;
 };
 
@@ -38,6 +40,8 @@ public:
     virtual void UpdateObjectMaterials(const Scene& scene, std::size_t objectIndex) = 0;
     virtual void UpdateObjectTransform(const Scene& scene, std::size_t objectIndex) = 0;
     virtual void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) = 0;
+    virtual void RenderFinal(const Scene& scene, const EditorCamera& camera,
+        const RenderSettings& settings, const std::filesystem::path& outputPath) = 0;
     virtual void Present() = 0;
     virtual void Resize(std::uint32_t width, std::uint32_t height) = 0;
     virtual void ResetAccumulation() = 0;

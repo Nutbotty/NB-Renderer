@@ -26,6 +26,8 @@ public:
     void UpdateObjectMaterials(const Scene &scene, std::size_t objectIndex) override;
     void UpdateObjectTransform(const Scene &scene, std::size_t objectIndex) override;
     void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) override;
+    void RenderFinal(const Scene& scene, const EditorCamera& camera,
+            const RenderSettings& settings, const std::filesystem::path& outputPath) override;
     void ResetAccumulation() override;
 
     [[nodiscard]] std::uint32_t GetAccumulatedSamples() const override{
@@ -59,6 +61,8 @@ private:
     //textures
     void UploadMaterialTextures(const Scene& scene);
     GLuint CreatePbrTextureArray(const Scene& scene, const std::vector<TextureId>& layerTextures, GLenum internalFormat);
+    GLuint CreateRenderTexture(std::uint32_t width, std::uint32_t height);
+    void SaveRenderTexture(GLuint texture, std::uint32_t width, std::uint32_t height, const std::filesystem::path& outputPath);
 
     // Helpers
     GLuint CreateStorageBuffer(GLuint binding, const void* data, GLsizeiptr size);

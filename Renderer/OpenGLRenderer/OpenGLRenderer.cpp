@@ -9,6 +9,8 @@
 #include <limits>
 #include <vector>
 #include "../../Core/BvhBuilder.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <../../external/stb_image_write.h>
 
 namespace {
     constexpr GLuint MaterialBufferBinding = 1;
@@ -106,16 +108,11 @@ ResizeRgba8Nearest(const SceneTexture& texture, int targetWidth, int targetHeigh
 void OpenGLRenderer::Initialize(Window& window) {
     m_Window = &window;
     glDisable(GL_DEPTH_TEST);
-    m_EditorCompShader = std::make_unique<Shader>("Renderer/OpenGLRenderer/Shaders/editor.comp");
-    m_FinalCompShader = std::make_unique<Shader>("Renderer/OpenGLRenderer/Shaders/FinalRender.comp");
-    m_EditorCompShader->use();
-    m_EditorCompShader->setInt("uEnvironmentMap", EnvironmentTextureUnit);
-    m_EditorCompShader->setInt("uBaseColorTextures", BaseColorTextureUnit);
-    m_EditorCompShader->setInt("uMetalRoughTextures", MetalRoughTextureUnit);
-    m_FinalCompShader->use();
-    m_FinalCompShader->setInt("uEnvironmentMap", EnvironmentTextureUnit);
-    m_FinalCompShader->setInt("uBaseColorTextures", BaseColorTextureUnit);
-    m_FinalCompShader->setInt("uMetalRoughTextures", MetalRoughTextureUnit);
+    m_CompShader = std::make_unique<Shader>("Renderer/OpenGLRenderer/Shaders/editor.comp");
+    m_CompShader->use();
+    m_CompShader->setInt("uEnvironmentMap", EnvironmentTextureUnit);
+    m_CompShader->setInt("uBaseColorTextures", BaseColorTextureUnit);
+    m_CompShader->setInt("uMetalRoughTextures", MetalRoughTextureUnit);
 }
 
 void OpenGLRenderer::SetScene(const Scene& scene) {
@@ -318,8 +315,6 @@ void OpenGLRenderer::CreateOutputTexture(std::uint32_t width, std::uint32_t heig
 }
 
 void OpenGLRenderer::Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) {
-    glClearColor(0.1f, 0.4f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
     if (!m_SceneUploaded) {
         SetScene(scene);
     }
@@ -329,12 +324,245 @@ void OpenGLRenderer::Render(const Scene& scene, const EditorCamera& camera, cons
     if (m_AccumulatedSamples >= settings.maxSamples) {
         return;
     }
-    DispatchCompute(scene, camera);
-    ++m_AccumulatedSamples;
+    const std::uint32_t remaining = settings.maxSamples - m_AccumulatedSamples;
+    const std::uint32_t samplesThisDispatch = std::min(settings.samplesPerDispatch, remaining);
+    DispatchCompute(scene, camera, m_OutputTexture, settings.width, settings.height, settings.maxDepth,
+        samplesThisDispatch, m_AccumulatedSamples);
+    m_AccumulatedSamples += samplesThisDispatch;
+}
+void OpenGLRenderer::RenderFinal(const Scene& scene, const EditorCamera& camera,
+    const RenderSettings& settings, const std::filesystem::path& outputPath) {
+    if (!m_SceneUploaded) {
+        SetScene(scene);
+    }
+    if (settings.width == 0 || settings.height == 0 || settings.maxSamples == 0) {
+        throw std::invalid_argument("Invalid final render settings");
+    }
+
+    GLuint finalTexture = CreateRenderTexture(settings.width, settings.height);
+
+    std::uint32_t accumulatedSamples = 0;
+    while (accumulatedSamples < settings.maxSamples) {
+        const std::uint32_t remaining = settings.maxSamples - accumulatedSamples;
+        const std::uint32_t batch = std::min(settings.samplesPerDispatch, remaining);
+        DispatchCompute(scene, camera, finalTexture, settings.width, settings.height,
+            settings.maxDepth, batch, accumulatedSamples);
+        accumulatedSamples += batch;
+    }
+
+    SaveRenderTexture(finalTexture, settings.width, settings.height, outputPath);
+    glDeleteTextures(1, &finalTexture);
+}
+GLuint OpenGLRenderer::CreateRenderTexture(
+    std::uint32_t width,
+    std::uint32_t height)
+{
+    GLuint texture = 0;
+
+    glGenTextures(
+        1,
+        &texture);
+
+    glBindTexture(
+        GL_TEXTURE_2D,
+        texture);
+
+    glTexStorage2D(
+        GL_TEXTURE_2D,
+        1,
+        GL_RGBA32F,
+        static_cast<GLsizei>(width),
+        static_cast<GLsizei>(height));
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_MIN_FILTER,
+        GL_LINEAR);
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_MAG_FILTER,
+        GL_LINEAR);
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_WRAP_S,
+        GL_CLAMP_TO_EDGE);
+
+    glTexParameteri(
+        GL_TEXTURE_2D,
+        GL_TEXTURE_WRAP_T,
+        GL_CLAMP_TO_EDGE);
+
+    glBindTexture(
+        GL_TEXTURE_2D,
+        0);
+
+    return texture;
+}
+void OpenGLRenderer::SaveRenderTexture(
+    GLuint texture,
+    std::uint32_t width,
+    std::uint32_t height,
+    const std::filesystem::path& outputPath)
+{
+    std::vector<float> pixels(
+        static_cast<std::size_t>(width) *
+        static_cast<std::size_t>(height) *
+        4);
+
+    glBindTexture(
+        GL_TEXTURE_2D,
+        texture);
+
+    glGetTexImage(
+        GL_TEXTURE_2D,
+        0,
+        GL_RGBA,
+        GL_FLOAT,
+        pixels.data());
+
+    glBindTexture(
+        GL_TEXTURE_2D,
+        0);
+
+    std::vector<std::uint8_t> output(
+        static_cast<std::size_t>(width) *
+        static_cast<std::size_t>(height) *
+        4);
+
+    for (std::uint32_t y = 0;
+         y < height;
+         ++y)
+    {
+        // Flip OpenGL bottom-left origin
+        // into normal image top-left origin.
+        const std::uint32_t sourceY =
+            height - 1 - y;
+
+        for (std::uint32_t x = 0;
+             x < width;
+             ++x)
+        {
+            const std::size_t src =
+                (
+                    static_cast<std::size_t>(
+                        sourceY) *
+                    width +
+                    x
+                ) * 4;
+
+            const std::size_t dst =
+                (
+                    static_cast<std::size_t>(
+                        y) *
+                    width +
+                    x
+                ) * 4;
+
+            glm::vec3 color(
+                pixels[src + 0],
+                pixels[src + 1],
+                pixels[src + 2]);
+
+            //
+            // Simple Reinhard tone map.
+            //
+            color =
+                color /
+                (color + glm::vec3(1.0f));
+
+            //
+            // Linear -> display gamma.
+            //
+            color =
+                glm::pow(
+                    glm::max(
+                        color,
+                        glm::vec3(0.0f)),
+                    glm::vec3(
+                        1.0f / 2.2f));
+
+            color =
+                glm::clamp(
+                    color,
+                    glm::vec3(0.0f),
+                    glm::vec3(1.0f));
+
+            output[dst + 0] =
+                static_cast<std::uint8_t>(
+                    color.r * 255.0f);
+
+            output[dst + 1] =
+                static_cast<std::uint8_t>(
+                    color.g * 255.0f);
+
+            output[dst + 2] =
+                static_cast<std::uint8_t>(
+                    color.b * 255.0f);
+
+            output[dst + 3] =
+                255;
+        }
+    }
+
+    std::filesystem::path finalPath =
+    std::filesystem::absolute(outputPath);
+
+    if (!finalPath.parent_path().empty()) {
+        std::filesystem::create_directories(
+            finalPath.parent_path());
+    }
+
+    std::cerr
+        << "Saving final render to: "
+        << finalPath
+        << '\n';
+
+    std::ofstream file(
+        finalPath,
+        std::ios::binary);
+
+    if (!file.is_open()) {
+        throw std::runtime_error(
+            "Could not open final render file: " +
+            finalPath.string());
+    }
+
+    auto writeCallback =
+        [](void* context, void* data, int size)
+        {
+            auto* stream =
+                static_cast<std::ofstream*>(context);
+
+            stream->write(
+                static_cast<const char*>(data),
+                size);
+        };
+
+    const int success =
+        stbi_write_png_to_func(
+            writeCallback,
+            &file,
+            static_cast<int>(width),
+            static_cast<int>(height),
+            4,
+            output.data(),
+            static_cast<int>(width * 4));
+
+    file.close();
+
+    if (success == 0) {
+        throw std::runtime_error(
+            "stb failed to encode final render");
+    }
 }
 
-void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& camera) {
-    Shader& shader = *m_EditorCompShader;
+void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& camera, GLuint outputTexture,
+    std::uint32_t width, std::uint32_t height,std::uint32_t maxDepth,
+    std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples) {
+
+    Shader& shader = *m_CompShader;
     shader.use();
     BindSceneBuffers();
     glActiveTexture(GL_TEXTURE0 + EnvironmentTextureUnit);
@@ -343,14 +571,17 @@ void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& cam
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_BaseColorTextureArray);
     glActiveTexture(GL_TEXTURE0 + MetalRoughTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_MetalRoughTextureArray);
-    glBindImageTexture(0, m_OutputTexture, 0, GL_FALSE,
+    glBindImageTexture(0, outputTexture, 0, GL_FALSE,
         0, GL_READ_WRITE, GL_RGBA32F);
-    shader.setUInt("uFrameIndex", m_AccumulatedSamples);
+    shader.setUInt("uFrameIndex", accumulatedSamples);
+    shader.setInt("uSamplesPerDispatch", static_cast<int>(samplesPerDispatch));
+    shader.setInt("uMaxDepth", static_cast<int>(maxDepth));
     shader.setInt("uTlasNodeCount", static_cast<int>(m_GpuScene.TlasNodes.size()));
+
     SetCameraUniforms(camera);
     SetEnvironmentUniforms(scene);
-    const GLuint groupCountX = (m_RenderWidth + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
-    const GLuint groupCountY = (m_RenderHeight + ComputeLocalSizeY - 1) / ComputeLocalSizeY;
+    const GLuint groupCountX = (width + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
+    const GLuint groupCountY = (height + ComputeLocalSizeY - 1) / ComputeLocalSizeY;
     glDispatchCompute(groupCountX, groupCountY, 1);
     glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
 }
@@ -371,7 +602,7 @@ void OpenGLRenderer::BindSceneBuffers() {
 }
 
 void OpenGLRenderer::SetCameraUniforms(const EditorCamera& camera) {
-    Shader& shader = *m_EditorCompShader;
+    Shader& shader = *m_CompShader;
     shader.setVec3("uCameraLookFrom", camera.LookFrom);
     shader.setVec3("uCameraLookAt", camera.LookAt);
     shader.setVec3("uCameraVUp", camera.VUp);
@@ -381,7 +612,7 @@ void OpenGLRenderer::SetCameraUniforms(const EditorCamera& camera) {
 }
 
 void OpenGLRenderer::SetEnvironmentUniforms(const Scene &scene) {
-    Shader& shader = *m_EditorCompShader;
+    Shader& shader = *m_CompShader;
     auto environment = scene.GetEnvironment();
     shader.setBool("uUseHdri", environment.HDRI);
     shader.setFloat("uEnvironmentIntensity", environment.intensity);
@@ -396,8 +627,7 @@ void OpenGLRenderer::ResetAccumulation() {
 
 void OpenGLRenderer::Shutdown() {
     DestroySceneResources();
-    m_EditorCompShader.reset();
-    m_FinalCompShader.reset();
+    m_CompShader.reset();
     m_Window = nullptr;
 }
 
