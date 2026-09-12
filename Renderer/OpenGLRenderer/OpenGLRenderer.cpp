@@ -326,11 +326,11 @@ void OpenGLRenderer::Render(const Scene& scene, const EditorCamera& camera, cons
     if (settings.width != m_RenderWidth || settings.height != m_RenderHeight) {
         CreateOutputTexture(settings.width, settings.height);
     }
-    if (m_AccumulationSamples >= settings.maxSamples) {
+    if (m_AccumulatedSamples >= settings.maxSamples) {
         return;
     }
     DispatchCompute(scene, camera);
-    ++m_AccumulationSamples;
+    ++m_AccumulatedSamples;
 }
 
 void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& camera) {
@@ -345,7 +345,7 @@ void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& cam
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_MetalRoughTextureArray);
     glBindImageTexture(0, m_OutputTexture, 0, GL_FALSE,
         0, GL_READ_WRITE, GL_RGBA32F);
-    shader.setUInt("uFrameIndex", m_AccumulationSamples);
+    shader.setUInt("uFrameIndex", m_AccumulatedSamples);
     shader.setInt("uTlasNodeCount", static_cast<int>(m_GpuScene.TlasNodes.size()));
     SetCameraUniforms(camera);
     SetEnvironmentUniforms(scene);
@@ -391,7 +391,7 @@ void OpenGLRenderer::SetEnvironmentUniforms(const Scene &scene) {
 }
 
 void OpenGLRenderer::ResetAccumulation() {
-    m_AccumulationSamples = 0;
+    m_AccumulatedSamples = 0;
 }
 
 void OpenGLRenderer::Shutdown() {

@@ -28,8 +28,8 @@ public:
     void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) override;
     void ResetAccumulation() override;
 
-    [[nodiscard]] std::uint32_t GetAccumulationSamples() const override{
-        return m_AccumulationSamples;
+    [[nodiscard]] std::uint32_t GetAccumulatedSamples() const override{
+        return m_AccumulatedSamples;
     }
     [[nodiscard]] RenderBackend GetBackend() const override {
         return RenderBackend::OpenGL;
@@ -91,7 +91,7 @@ private:
     std::vector<int> m_MetalRoughLayerByTexture;
 
     BvhBuildResult m_GpuScene;
-    std::uint32_t m_AccumulationSamples = 0;
+    std::uint32_t m_AccumulatedSamples = 0;
     bool m_SceneUploaded = false;
 };
 

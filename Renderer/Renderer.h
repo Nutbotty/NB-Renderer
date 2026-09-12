@@ -23,7 +23,7 @@ struct RenderSettings {
     std::uint32_t width = 1280;
     std::uint32_t height = 720;
     std::uint32_t maxSamples = 24;
-    bool useFinalShader = false;
+    std::uint32_t maxDepth = 4;
 };
 
 class Renderer {
@@ -42,7 +42,7 @@ public:
     virtual void Resize(std::uint32_t width, std::uint32_t height) = 0;
     virtual void ResetAccumulation() = 0;
 
-    [[nodiscard]] virtual std::uint32_t GetAccumulationSamples() const = 0;
+    [[nodiscard]] virtual std::uint32_t GetAccumulatedSamples() const = 0;
     [[nodiscard]] virtual RenderBackend GetBackend() const = 0;
     [[nodiscard]] virtual void* GetViewportTexture() const = 0;
 };

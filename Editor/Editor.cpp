@@ -68,12 +68,10 @@ void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& sc
     m_ViewportRenderSettings.width = 1280;
     m_ViewportRenderSettings.height = 720;
     m_ViewportRenderSettings.maxSamples = 24;
-    m_ViewportRenderSettings.useFinalShader = false;
     m_FinalRenderSettings.mode = RenderMode::Final;
     m_FinalRenderSettings.width = 1920;
     m_FinalRenderSettings.height = 1080;
     m_FinalRenderSettings.maxSamples = 2048;
-    m_FinalRenderSettings.useFinalShader = true;
 
     m_Initialized = true;
 }
@@ -140,9 +138,9 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
             m_ViewportRenderSettings.maxSamples = static_cast<std::uint32_t>(maxSamples);
             renderer.ResetAccumulation();
         }
-        ImGui::Text("Accumulation: %u / %u", renderer.GetAccumulationSamples(), m_ViewportRenderSettings.maxSamples);
+        ImGui::Text("Accumulation: %u / %u", renderer.GetAccumulatedSamples(), m_ViewportRenderSettings.maxSamples);
         const float progress = m_ViewportRenderSettings.maxSamples > 0 ? std::min(1.0f,
-                static_cast<float>(renderer.GetAccumulationSamples()) /
+                static_cast<float>(renderer.GetAccumulatedSamples()) /
                 static_cast<float>(m_ViewportRenderSettings.maxSamples)) : 0.0f;
         ImGui::ProgressBar(progress, ImVec2(-FLT_MIN, 0.0f));
         if (ImGui::Button("Reset Viewport Accumulation")) {
@@ -164,7 +162,6 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
         if (ImGui::InputInt("Samples##Final", &maxSamples)) {
             m_FinalRenderSettings.maxSamples = static_cast<std::uint32_t>(std::max(maxSamples, 1));
         }
-        ImGui::Checkbox("Use Final Shader", &m_FinalRenderSettings.useFinalShader);
         ImGui::InputText("Output", m_FinalRenderPath, sizeof(m_FinalRenderPath));
         ImGui::Spacing();
         const ImVec2 available = ImGui::GetContentRegionAvail();
