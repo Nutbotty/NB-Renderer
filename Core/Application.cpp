@@ -37,7 +37,7 @@ void Application::Run() {
         float deltaTime = CalculateDeltaTime();
         m_Editor.BeginFrame();
         m_Editor.Update(m_Scene, *m_Renderer, deltaTime);
-        m_Renderer->Render(m_Scene, m_Editor.GetEditorCamera(), RenderSettings{});
+        m_Renderer->Render(m_Scene, m_Editor.GetEditorCamera(), m_Editor.GetViewportRenderSettings());
         m_Editor.Render();
         m_Renderer->Present();
     }
