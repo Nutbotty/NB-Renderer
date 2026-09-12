@@ -126,9 +126,13 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
         int width = static_cast<int>(m_ViewportRenderSettings.width);
         int height = static_cast<int>(m_ViewportRenderSettings.height);
         int maxSamples = static_cast<int>(m_ViewportRenderSettings.maxSamples);
+        int samplesPerDispatch = static_cast<int>(m_ViewportRenderSettings.samplesPerDispatch);
+        int maxDepth = static_cast<int>(m_ViewportRenderSettings.maxDepth);
         changed |= ImGui::InputInt("Width##Viewport", &width);
         changed |= ImGui::InputInt("Height##Viewport", &height);
         changed |= ImGui::InputInt("Max Samples##Viewport", &maxSamples);
+        changed |= ImGui::InputInt("Samples Per Dispatch##Viewport", &samplesPerDispatch);
+        changed |= ImGui::InputInt("Max Bounces##Viewport", &maxDepth);
         width = std::max(width, 1);
         height = std::max(height, 1);
         maxSamples = std::max(maxSamples, 1);
@@ -136,6 +140,8 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
             m_ViewportRenderSettings.width = static_cast<std::uint32_t>(width);
             m_ViewportRenderSettings.height = static_cast<std::uint32_t>(height);
             m_ViewportRenderSettings.maxSamples = static_cast<std::uint32_t>(maxSamples);
+            m_ViewportRenderSettings.samplesPerDispatch = static_cast<std::uint32_t>(samplesPerDispatch);
+            m_ViewportRenderSettings.maxDepth = static_cast<std::uint32_t>(maxDepth);
             renderer.ResetAccumulation();
         }
         ImGui::Text("Accumulation: %u / %u", renderer.GetAccumulatedSamples(), m_ViewportRenderSettings.maxSamples);
@@ -153,6 +159,8 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
         int width = static_cast<int>(m_FinalRenderSettings.width);
         int height = static_cast<int>(m_FinalRenderSettings.height);
         int maxSamples = static_cast<int>(m_FinalRenderSettings.maxSamples);
+        int samplesPerDispatch = static_cast<int>(m_FinalRenderSettings.samplesPerDispatch);
+        int maxDepth = static_cast<int>(m_FinalRenderSettings.maxDepth);
         if (ImGui::InputInt("Width##Final", &width)) {
             m_FinalRenderSettings.width = static_cast<std::uint32_t>(std::max(width, 1));
         }
@@ -161,6 +169,12 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
         }
         if (ImGui::InputInt("Samples##Final", &maxSamples)) {
             m_FinalRenderSettings.maxSamples = static_cast<std::uint32_t>(std::max(maxSamples, 1));
+        }
+        if (ImGui::InputInt("Samples Per Dispatch##Final", &samplesPerDispatch)) {
+            m_FinalRenderSettings.samplesPerDispatch = static_cast<std::uint32_t>(std::clamp(samplesPerDispatch, 1, 64));
+        }
+        if (ImGui::InputInt("Max Bounces##Final", &maxDepth)) {
+            m_FinalRenderSettings.maxDepth = static_cast<std::uint32_t>(std::clamp(maxDepth, 1, 64));
         }
         ImGui::InputText("Output", m_FinalRenderPath, sizeof(m_FinalRenderPath));
         ImGui::Spacing();
