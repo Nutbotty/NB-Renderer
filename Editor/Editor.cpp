@@ -63,11 +63,26 @@ void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& sc
     m_ImGuiBackend = ImGuiBackend::Create(renderer.GetBackend());
     m_ImGuiBackend->Initialize(window);
     m_PreviousCameraState = CaptureCameraState(m_Camera);
+
+    m_ViewportRenderSettings.mode = RenderMode::Editor;
+    m_ViewportRenderSettings.width = 1280;
+    m_ViewportRenderSettings.height = 720;
+    m_ViewportRenderSettings.maxSamples = 24;
+    m_ViewportRenderSettings.useFinalShader = false;
+    m_FinalRenderSettings.mode = RenderMode::Final;
+    m_FinalRenderSettings.width = 1920;
+    m_FinalRenderSettings.height = 1080;
+    m_FinalRenderSettings.maxSamples = 2048;
+    m_FinalRenderSettings.useFinalShader = true;
+
     m_Initialized = true;
 }
 
 void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     DrawMenu(scene, renderer);
+    if (m_ShowRenderPanel) {
+        DrawRenderPanel(renderer);
+    }
     if (m_ShowScenePanel) {
         DrawScenePanel(scene, renderer);
     }
@@ -101,6 +116,65 @@ void EditorLayer::BeginFrame() {
     ImGui::DockSpaceOverViewport();
 }
 
+void EditorLayer::DrawRenderPanel(Renderer& renderer)
+{
+    if (!ImGui::Begin("Render", &m_ShowRenderPanel)) {
+        ImGui::End();
+        return;
+    }
+
+    if (ImGui::CollapsingHeader("Viewport", ImGuiTreeNodeFlags_DefaultOpen)) {
+        bool changed = false;
+        int width = static_cast<int>(m_ViewportRenderSettings.width);
+        int height = static_cast<int>(m_ViewportRenderSettings.height);
+        int maxSamples = static_cast<int>(m_ViewportRenderSettings.maxSamples);
+        changed |= ImGui::InputInt("Width##Viewport", &width);
+        changed |= ImGui::InputInt("Height##Viewport", &height);
+        changed |= ImGui::InputInt("Max Samples##Viewport", &maxSamples);
+        width = std::max(width, 1);
+        height = std::max(height, 1);
+        maxSamples = std::max(maxSamples, 1);
+        if (changed) {
+            m_ViewportRenderSettings.width = static_cast<std::uint32_t>(width);
+            m_ViewportRenderSettings.height = static_cast<std::uint32_t>(height);
+            m_ViewportRenderSettings.maxSamples = static_cast<std::uint32_t>(maxSamples);
+            renderer.ResetAccumulation();
+        }
+        ImGui::Text("Accumulation: %u / %u", renderer.GetAccumulationSamples(), m_ViewportRenderSettings.maxSamples);
+        const float progress = m_ViewportRenderSettings.maxSamples > 0 ? std::min(1.0f,
+                static_cast<float>(renderer.GetAccumulationSamples()) /
+                static_cast<float>(m_ViewportRenderSettings.maxSamples)) : 0.0f;
+        ImGui::ProgressBar(progress, ImVec2(-FLT_MIN, 0.0f));
+        if (ImGui::Button("Reset Viewport Accumulation")) {
+            renderer.ResetAccumulation();
+        }
+    }
+    ImGui::Separator();
+
+    if (ImGui::CollapsingHeader("Final Render", ImGuiTreeNodeFlags_DefaultOpen)) {
+        int width = static_cast<int>(m_FinalRenderSettings.width);
+        int height = static_cast<int>(m_FinalRenderSettings.height);
+        int maxSamples = static_cast<int>(m_FinalRenderSettings.maxSamples);
+        if (ImGui::InputInt("Width##Final", &width)) {
+            m_FinalRenderSettings.width = static_cast<std::uint32_t>(std::max(width, 1));
+        }
+        if (ImGui::InputInt("Height##Final", &height)) {
+            m_FinalRenderSettings.height = static_cast<std::uint32_t>(std::max(height, 1));
+        }
+        if (ImGui::InputInt("Samples##Final", &maxSamples)) {
+            m_FinalRenderSettings.maxSamples = static_cast<std::uint32_t>(std::max(maxSamples, 1));
+        }
+        ImGui::Checkbox("Use Final Shader", &m_FinalRenderSettings.useFinalShader);
+        ImGui::InputText("Output", m_FinalRenderPath, sizeof(m_FinalRenderPath));
+        ImGui::Spacing();
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        if (ImGui::Button("Final Render", ImVec2(available.x, 35.0f))){
+            m_FinalRenderRequested = true;
+        }
+    }
+    ImGui::End();
+}
+
 void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
     if (!ImGui::BeginMainMenuBar()) {
         return;
@@ -124,7 +198,7 @@ void EditorLayer::DrawMenu(Scene& scene, Renderer& renderer) {
         ImGui::MenuItem("Camera", nullptr, &m_ShowCameraPanel);
         ImGui::MenuItem("Objects", nullptr, &m_ShowObjectPanel);
         ImGui::MenuItem("Viewport", nullptr, &m_ShowViewport);
-        ImGui::MenuItem("Renderer", nullptr, &m_ShowRendererPanel);
+        ImGui::MenuItem("Renderer", nullptr, &m_ShowRenderPanel);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Render")) {
