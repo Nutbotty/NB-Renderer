@@ -89,7 +89,7 @@ private:
     RenderSettings m_ViewportRenderSettings;
     RenderSettings m_FinalRenderSettings;
     bool m_FinalRenderRequested = false;
-    char m_FinalRenderPath[260] = "/ImageOutputFiles/render.png";
+    char m_FinalRenderPath[260] = "ImageOutputFiles/render.png";
 };
 
 #endif //NB_RENDERER_EDITOR_H

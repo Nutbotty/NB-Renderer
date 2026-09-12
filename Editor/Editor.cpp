@@ -165,7 +165,7 @@ void EditorLayer::DrawRenderPanel(Renderer& renderer)
         ImGui::InputText("Output", m_FinalRenderPath, sizeof(m_FinalRenderPath));
         ImGui::Spacing();
         const ImVec2 available = ImGui::GetContentRegionAvail();
-        if (ImGui::Button("Final Render", ImVec2(available.x, 35.0f))){
+        if (ImGui::Button("Final Render##FinalRenderButton", ImVec2(available.x, 35.0f))){
             m_FinalRenderRequested = true;
         }
     }
