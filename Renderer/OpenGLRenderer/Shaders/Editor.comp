@@ -16,9 +16,6 @@ const float PI = 3.14159265358979323846;
 const float TWO_PI = 6.28318530717958647692;
 const float EPSILON = 1e-8;
 const float MAX_RAY_DISTANCE = 1e30;
-const int SAMPLES_PER_PIXEL = 5;
-const int SAMPLES_PER_DISPATCH = 1;
-const int MAX_DEPTH = 4;
 
 layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 layout(rgba32f, binding = 0 ) uniform image2D outputImage;
@@ -150,6 +147,10 @@ uniform float uEnvironmentIntensity;
 uniform vec3 uEnvironmentRotation;
 uniform vec3 uSkyColor1;
 uniform vec3 uSkyColor2;
+
+uniform int uSamplesPerDispatch;
+uniform int uMaxDepth;
+uniform uint uAccumulatedSamples;
 
 
 struct Material {
@@ -854,7 +855,7 @@ vec3 rayColor(Ray r) {
     Ray currentRay = r;
     vec3 throughput = vec3(1.0, 1.0, 1.0);
     vec3 radiance = vec3(0.0);
-    for (int bounce = 0; bounce < MAX_DEPTH; ++bounce) {
+    for (int bounce = 0; bounce < uMaxDepth; ++bounce) {
         HitRecord rec;
         if (hitWorld(currentRay, Interval(0.001, MAX_RAY_DISTANCE), rec)) {
             Material material = loadMaterial(rec.material);
@@ -979,16 +980,20 @@ void main() {
     Camera camera = makeCamera(imageDimensions);
 
     vec3 color = vec3(0.0);
-
-    for (int sampleIndex = 0; sampleIndex < SAMPLES_PER_DISPATCH; ++sampleIndex) {
+    for (int sampleIndex = 0; sampleIndex < uSamplesPerDispatch; ++sampleIndex) {
         Ray ray = getCameraRay(camera, pixel);
         color += rayColor(ray);
     }
 
-    vec3 currentColor = color / float(SAMPLES_PER_DISPATCH);
+    vec3 currentColor = color / float(uSamplesPerDispatch);
+    float previousSampleCount = float(uAccumulatedSamples);
+    float newSampleCount = float(uSamplesPerDispatch);
+    vec3 previousAverage = vec3(0.0);
+    if (uAccumulatedSamples > 0u) {
+        previousAverage = imageLoad(outputImage, pixel).rgb;
+    }
 
     vec3 accumulatedAverageColor;
-
     if (uFrameIndex == 0u) {
         accumulatedAverageColor = currentColor;
     } else {
@@ -996,6 +1001,6 @@ void main() {
         float previousFrameCount = float(uFrameIndex);
         accumulatedAverageColor = (previousAverageColor * previousFrameCount + currentColor) / (previousFrameCount + 1.0);
     }
-//    finalColor = sqrt(max(finalColor, vec3(0.0)));
+
     imageStore(outputImage, pixel, vec4(accumulatedAverageColor, 1.0));
 }
