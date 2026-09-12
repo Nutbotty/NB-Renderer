@@ -52,7 +52,9 @@ private:
     void BindSceneBuffers();
     void SetCameraUniforms(const EditorCamera& camera);
     void SetEnvironmentUniforms(const Scene& scene);
-    void DispatchCompute(const Scene& scene, const EditorCamera& camera);
+    void DispatchCompute(const Scene& scene, const EditorCamera& camera, GLuint outputTexture,
+    std::uint32_t width, std::uint32_t height,std::uint32_t maxDepth,
+    std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples);
 
     //textures
     void UploadMaterialTextures(const Scene& scene);
@@ -63,8 +65,7 @@ private:
     static unsigned int CreateHdrTexture(const SceneTexture& texture);
 
     Window* m_Window = nullptr;
-    std::unique_ptr<Shader> m_EditorCompShader;
-    std::unique_ptr<Shader> m_FinalCompShader;
+    std::unique_ptr<Shader> m_CompShader;
 
     unsigned int m_OutputTexture = 0;
     std::uint32_t m_RenderWidth = 0;
