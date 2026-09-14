@@ -79,7 +79,7 @@ void EditorLayer::Initialize(Window& window, Renderer& renderer, const Scene& sc
 void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     DrawMenu(scene, renderer);
     if (m_ShowRenderPanel) {
-        DrawRenderPanel(renderer);
+        DrawRenderPanel(scene , renderer);
     }
     if (m_ShowScenePanel) {
         DrawScenePanel(scene, renderer);
@@ -114,7 +114,7 @@ void EditorLayer::BeginFrame() {
     ImGui::DockSpaceOverViewport();
 }
 
-void EditorLayer::DrawRenderPanel(Renderer& renderer)
+void EditorLayer::DrawRenderPanel(Scene& scene, Renderer& renderer)
 {
     if (!ImGui::Begin("Render", &m_ShowRenderPanel)) {
         ImGui::End();

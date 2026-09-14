@@ -60,7 +60,7 @@ public:
 
 private:
     void DrawMenu(Scene& scene, Renderer& renderer);
-    void DrawRenderPanel(Renderer& renderer);
+    void DrawRenderPanel(Scene& scene, Renderer& renderer);
     void DrawScenePanel(Scene& scene, Renderer& renderer);
     void DrawEnvironmentPanel(Scene& scene, Renderer& renderer);
     void DrawObjectPanel(Scene& scene, Renderer& renderer);
