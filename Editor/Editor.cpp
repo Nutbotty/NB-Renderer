@@ -99,6 +99,9 @@ void EditorLayer::Update(Scene& scene, Renderer& renderer, float deltaTime) {
     if (m_ShowEnvironmentPanel) {
         DrawEnvironmentPanel(scene, renderer);
     }
+    if (m_ShowFinalRenderWindow) {
+        DrawFinalRenderWindow(renderer);
+    }
     m_Input->Update(deltaTime, m_ViewportHovered, m_ViewportFocused);
     const CameraState currentCameraState = CaptureCameraState(m_Camera);
     if (CameraStateChanged(m_PreviousCameraState, currentCameraState)) {
