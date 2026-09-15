@@ -330,6 +330,32 @@ void OpenGLRenderer::Render(const Scene& scene, const EditorCamera& camera, cons
         samplesThisDispatch, m_AccumulatedSamples);
     m_AccumulatedSamples += samplesThisDispatch;
 }
+void OpenGLRenderer::StartFinalRender(const Scene& scene, const EditorCamera& camera,
+    const RenderSettings& settings, const std::filesystem::path& outputPath) {
+    if (m_FinalRenderTexture != 0) {
+        glDeleteTextures(1, &m_FinalRenderTexture);
+    }
+    m_FinalRenderTexture = CreateRenderTexture(settings.width, settings.height);
+    m_FinalRenderSettings = settings;
+    m_FinalRenderCamera = camera;
+    m_FinalRenderPath = outputPath;
+    m_FinalRenderSamples = 0;
+    m_FinalRenderActive = true;
+}
+void OpenGLRenderer::UpdateFinalRender(const Scene& scene) {
+    if (!m_FinalRenderActive) {
+        return;
+    }
+    const std::uint32_t remaining = m_FinalRenderSettings.maxSamples - m_FinalRenderSamples;
+    const std::uint32_t samplesThisDispatch = std::min(m_FinalRenderSettings.samplesPerDispatch, remaining);
+    DispatchCompute(scene, m_FinalRenderCamera, m_FinalRenderTexture, m_FinalRenderSettings.width,
+        m_FinalRenderSettings.height, m_FinalRenderSettings.maxDepth, samplesThisDispatch, m_FinalRenderSamples);
+    m_FinalRenderSamples += samplesThisDispatch;
+    if (m_FinalRenderSamples >= m_FinalRenderSettings.maxSamples) {
+        SaveRenderTexture(m_FinalRenderTexture, m_FinalRenderSettings.width, m_FinalRenderSettings.height, m_FinalRenderPath);
+        m_FinalRenderActive = false;
+    }
+}
 void OpenGLRenderer::RenderFinal(const Scene& scene, const EditorCamera& camera,
     const RenderSettings& settings, const std::filesystem::path& outputPath) {
     if (!m_SceneUploaded) {

@@ -26,6 +26,9 @@ public:
     void UpdateObjectMaterials(const Scene &scene, std::size_t objectIndex) override;
     void UpdateObjectTransform(const Scene &scene, std::size_t objectIndex) override;
     void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) override;
+    void StartFinalRender(const Scene& scene, const EditorCamera& camera,
+        const RenderSettings& settings, const std::filesystem::path& outputPath) override;
+    void UpdateFinalRender(const Scene& scene) override;
     void RenderFinal(const Scene& scene, const EditorCamera& camera,
             const RenderSettings& settings, const std::filesystem::path& outputPath) override;
     void ResetAccumulation() override;
@@ -39,6 +42,22 @@ public:
     [[nodiscard]] void* GetViewportTexture() const override {
         return reinterpret_cast<void*>(static_cast<intptr_t>(m_OutputTexture));
     }
+    [[nodiscard]] float GetFinalRenderProgress() const override {
+        if (m_FinalRenderSettings.maxSamples == 0) {
+            return 0.0f;
+        }
+        return static_cast<float>(m_FinalRenderSamples) / static_cast<float>(m_FinalRenderSettings.maxSamples);
+    }
+    [[nodiscard]] std::uint32_t GetFinalRenderSamples() const override {
+        return m_FinalRenderSamples;
+    }
+    [[nodiscard]] std::uint32_t GetFinalRenderMaxSamples() const override {
+        return m_FinalRenderSettings.maxSamples;
+    }
+    [[nodiscard]] void* GetFinalRenderTexture() const override {
+        return reinterpret_cast<void*>(static_cast<intptr_t>(m_FinalRenderTexture));
+    }
+
 private:
 
     // GPU Resource Management
@@ -97,6 +116,14 @@ private:
 
     BvhBuildResult m_GpuScene;
     std::uint32_t m_AccumulatedSamples = 0;
+    bool m_FinalRenderActive = false;
+
+    GLuint m_FinalRenderTexture = 0;
+    RenderSettings m_FinalRenderSettings;
+    EditorCamera m_FinalRenderCamera;
+    std::uint32_t m_FinalRenderSamples = 0;
+    std::filesystem::path m_FinalRenderPath;
+
     bool m_SceneUploaded = false;
 };
 

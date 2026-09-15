@@ -40,6 +40,9 @@ public:
     virtual void UpdateObjectMaterials(const Scene& scene, std::size_t objectIndex) = 0;
     virtual void UpdateObjectTransform(const Scene& scene, std::size_t objectIndex) = 0;
     virtual void Render(const Scene& scene, const EditorCamera& camera, const RenderSettings& settings) = 0;
+    virtual void StartFinalRender(const Scene& scene, const EditorCamera& camera,
+        const RenderSettings& settings, const std::filesystem::path& outputPath) = 0;;
+    virtual void UpdateFinalRender(const Scene& scene) = 0;
     virtual void RenderFinal(const Scene& scene, const EditorCamera& camera,
         const RenderSettings& settings, const std::filesystem::path& outputPath) = 0;
     virtual void Present() = 0;
@@ -49,6 +52,11 @@ public:
     [[nodiscard]] virtual std::uint32_t GetAccumulatedSamples() const = 0;
     [[nodiscard]] virtual RenderBackend GetBackend() const = 0;
     [[nodiscard]] virtual void* GetViewportTexture() const = 0;
+    [[nodiscard]] virtual float GetFinalRenderProgress() const = 0;
+    [[nodiscard]] virtual std::uint32_t GetFinalRenderSamples() const = 0;
+    [[nodiscard]] virtual std::uint32_t GetFinalRenderMaxSamples() const = 0;
+    [[nodiscard]] virtual void* GetFinalRenderTexture() const = 0;
+
 };
 
 #endif //NB_RENDERER_RENDERER_H
