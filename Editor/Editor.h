@@ -66,6 +66,7 @@ private:
     void DrawObjectPanel(Scene& scene, Renderer& renderer);
     void DrawCameraPanel();
     void DrawViewport(Renderer& renderer);
+    void DrawFinalRenderWindow(Renderer& renderer);
 
 
     EditorCamera m_Camera;

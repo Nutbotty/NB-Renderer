@@ -453,6 +453,25 @@ void EditorLayer::DrawViewport(Renderer& renderer) {
     ImGui::End();
 }
 
+void EditorLayer::DrawFinalRenderWindow(Renderer& renderer) {
+    if (!m_ShowFinalRenderWindow) {
+        return;
+    }
+    if (!ImGui::Begin("Final Render", &m_ShowFinalRenderWindow)) {
+        ImGui::End();
+        return;
+    }
+    const float progress = renderer.GetFinalRenderProgress();
+
+    ImGui::ProgressBar(progress, ImVec2(-FLT_MIN, 0.0f));
+    ImGui::Text("%u / %u samples", renderer.GetFinalRenderSamples(), renderer.GetFinalRenderMaxSamples());
+    if (renderer.GetFinalRenderTexture() != 0) {
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        ImGui::Image(renderer.GetFinalRenderTexture(), available, ImVec2(0.0f, 1.0f), ImVec2(1.0f, 0.0f));
+    }
+    ImGui::End();
+}
+
 void EditorLayer::Render() {
     assert(m_Initialized);
     ImGui::Render();
