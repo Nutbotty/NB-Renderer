@@ -38,10 +38,13 @@ void Application::Run() {
         m_Editor.BeginFrame();
         m_Editor.Update(m_Scene, *m_Renderer, deltaTime);
         m_Renderer->Render(m_Scene, m_Editor.GetEditorCamera(), m_Editor.GetViewportRenderSettings());
-        if (m_Editor.ConsumeFinalRenderRequest()) {
-            m_Renderer->RenderFinal(m_Scene, m_Editor.GetEditorCamera(),
-                m_Editor.GetFinalRenderSettings(), m_Editor.GetFinalRenderPath());
-        }
+        // if (m_Editor.ConsumeFinalRenderRequest()) {
+        //     m_Renderer->RenderFinal(m_Scene, m_Editor.GetEditorCamera(),
+        //         m_Editor.GetFinalRenderSettings(), m_Editor.GetFinalRenderPath());
+        // }
+        m_Renderer->UpdateFinalRender(
+            m_Scene);
+
         m_Editor.Render();
         m_Renderer->Present();
     }
