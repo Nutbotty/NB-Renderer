@@ -179,8 +179,9 @@ void EditorLayer::DrawRenderPanel(Scene& scene, Renderer& renderer)
         ImGui::InputText("Output", m_FinalRenderPath, sizeof(m_FinalRenderPath));
         ImGui::Spacing();
         const ImVec2 available = ImGui::GetContentRegionAvail();
-        if (ImGui::Button("Final Render##FinalRenderButton", ImVec2(available.x, 35.0f))){
-            m_FinalRenderRequested = true;
+        if (ImGui::Button("Final Render##FinalRenderButton", ImVec2(available.x, 35.0f))) {
+            renderer.StartFinalRender(scene, m_Camera, m_FinalRenderSettings, m_FinalRenderPath);
+            m_ShowFinalRenderWindow = true;
         }
     }
     ImGui::End();

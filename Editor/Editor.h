@@ -81,6 +81,7 @@ private:
     bool m_ShowViewport = true;
     bool m_ShowRenderPanel = true;
     bool m_ShowObjectPanel = true;
+    bool m_ShowFinalRenderWindow = false;
     std::size_t m_SelectedObject = 0;
     bool m_ShowCameraPanel = true;
     bool m_DofEnabled = false;
