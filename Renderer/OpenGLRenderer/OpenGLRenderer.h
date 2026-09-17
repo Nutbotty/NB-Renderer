@@ -73,6 +73,7 @@ private:
     void BindSceneBuffers();
     void SetCameraUniforms(const EditorCamera& camera);
     void SetEnvironmentUniforms(const Scene& scene);
+    void UpdateRenderConstants(const Scene& scene, const EditorCamera& camera, std::uint32_t maxDepth, std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples);
     void DispatchCompute(const Scene& scene, const EditorCamera& camera, GLuint outputTexture,
     std::uint32_t width, std::uint32_t height,std::uint32_t maxDepth,
     std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples);
@@ -111,6 +112,7 @@ private:
     unsigned int m_EnvironmentTexture = 0;
     GLuint m_BaseColorTextureArray = 0;
     GLuint m_MetalRoughTextureArray = 0;
+    GLuint m_RenderConstantsBuffer = 0;
     std::vector<int> m_BaseColorLayerByTexture;
     std::vector<int> m_MetalRoughLayerByTexture;
 
