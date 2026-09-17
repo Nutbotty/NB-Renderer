@@ -26,9 +26,11 @@ namespace {
     constexpr GLuint BlasBufferBinding = 11;
     constexpr GLuint InstanceMaterialBufferBinding = 12;
 
-    constexpr GLint EnvironmentTextureUnit = 1;
-    constexpr GLint BaseColorTextureUnit = 2;
-    constexpr GLint MetalRoughTextureUnit = 3;
+    constexpr GLint EnvironmentTextureUnit = 13;
+    constexpr GLint BaseColorTextureUnit = 14;
+    constexpr GLint MetalRoughTextureUnit = 15;
+    constexpr GLuint RenderConstantsBinding = 16;
+
     constexpr GLsizei PbrTextureWidth = 1024;
     constexpr GLsizei PbrTextureHeight = 1024;
 
@@ -103,16 +105,44 @@ ResizeRgba8Nearest(const SceneTexture& texture, int targetWidth, int targetHeigh
         }
         return result;
     }
+
+    struct alignas(16) GpuRenderConstants {
+        std::int32_t TlasNodeCount = 0;
+        std::int32_t SamplesPerDispatch = 1;
+        std::int32_t MaxDepth = 4;
+        std::uint32_t AccumulatedSamples = 0;
+        std::uint32_t UseHdri = 0;
+        float EnvironmentIntensity = 1.0f;
+        float Padding0 = 0.0f;
+        float Padding1 = 0.0f;
+        // xyz = look from
+        // w   = vertical FOV
+        glm::vec4 CameraLookFromVerticalFov{0.0f};
+        // xyz = look at
+        // w   = focus distance
+        glm::vec4 CameraLookAtFocusDistance{0.0f};
+        // xyz = camera up
+        // w   = defocus angle
+        glm::vec4 CameraVUpDefocusAngle{0.0f};
+        // xyz used
+        glm::vec4 EnvironmentRotation{0.0f};
+        // xyz used
+        glm::vec4 SkyColor1{0.0f};
+        // xyz used
+        glm::vec4 SkyColor2{0.0f};
+    };
+    static_assert(sizeof(GpuRenderConstants) == 128, "GpuRenderConstants layout mismatch");
 }
 
 void OpenGLRenderer::Initialize(Window& window) {
     m_Window = &window;
     glDisable(GL_DEPTH_TEST);
-    m_CompShader = std::make_unique<Shader>("Renderer/OpenGLRenderer/Shaders/editor.comp");
-    m_CompShader->use();
-    m_CompShader->setInt("uEnvironmentMap", EnvironmentTextureUnit);
-    m_CompShader->setInt("uBaseColorTextures", BaseColorTextureUnit);
-    m_CompShader->setInt("uMetalRoughTextures", MetalRoughTextureUnit);
+    m_CompShader = std::make_unique<Shader>("Renderer/OpenGLRenderer/Shaders/PathTracer.comp");
+    glGenBuffers(1, &m_RenderConstantsBuffer);
+    glBindBuffer(GL_UNIFORM_BUFFER, m_RenderConstantsBuffer);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GpuRenderConstants), nullptr, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, RenderConstantsBinding, m_RenderConstantsBuffer);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
 }
 
 void OpenGLRenderer::SetScene(const Scene& scene) {
@@ -448,28 +478,21 @@ void OpenGLRenderer::SaveRenderTexture(GLuint texture, std::uint32_t width,
     }
 }
 
-void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& camera, GLuint outputTexture,
-    std::uint32_t width, std::uint32_t height,std::uint32_t maxDepth,
-    std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples) {
-
+void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& camera, GLuint outputTexture, std::uint32_t width,
+    std::uint32_t height, std::uint32_t maxDepth, std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples) {
     Shader& shader = *m_CompShader;
     shader.use();
     BindSceneBuffers();
+    UpdateRenderConstants(scene, camera, maxDepth, samplesPerDispatch, accumulatedSamples);
+
     glActiveTexture(GL_TEXTURE0 + EnvironmentTextureUnit);
     glBindTexture(GL_TEXTURE_2D, m_EnvironmentTexture);
     glActiveTexture(GL_TEXTURE0 + BaseColorTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_BaseColorTextureArray);
     glActiveTexture(GL_TEXTURE0 + MetalRoughTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_MetalRoughTextureArray);
-    glBindImageTexture(0, outputTexture, 0, GL_FALSE,
-        0, GL_READ_WRITE, GL_RGBA32F);
-    shader.setUInt("uFrameIndex", accumulatedSamples);
-    shader.setInt("uSamplesPerDispatch", static_cast<int>(samplesPerDispatch));
-    shader.setInt("uMaxDepth", static_cast<int>(maxDepth));
-    shader.setInt("uTlasNodeCount", static_cast<int>(m_GpuScene.TlasNodes.size()));
+    glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-    SetCameraUniforms(camera);
-    SetEnvironmentUniforms(scene);
     const GLuint groupCountX = (width + ComputeLocalSizeX - 1) / ComputeLocalSizeX;
     const GLuint groupCountY = (height + ComputeLocalSizeY - 1) / ComputeLocalSizeY;
     glDispatchCompute(groupCountX, groupCountY, 1);
@@ -489,6 +512,7 @@ void OpenGLRenderer::BindSceneBuffers() {
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, MeshBufferBinding, m_MeshBuffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, BlasBufferBinding, m_BlasBuffer);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, InstanceMaterialBufferBinding, m_InstanceMaterialBuffer);
+    glBindBufferBase(GL_UNIFORM_BUFFER, RenderConstantsBinding, m_RenderConstantsBuffer);
 }
 
 void OpenGLRenderer::SetCameraUniforms(const EditorCamera& camera) {
@@ -511,12 +535,43 @@ void OpenGLRenderer::SetEnvironmentUniforms(const Scene &scene) {
     shader.setVec3("uSkyColor2", environment.color2);
 }
 
+void OpenGLRenderer::UpdateRenderConstants(const Scene& scene, const EditorCamera& camera, std::uint32_t maxDepth,
+    std::uint32_t samplesPerDispatch, std::uint32_t accumulatedSamples) {
+    const SceneEnvironment& environment =scene.GetEnvironment();
+    GpuRenderConstants constants{};
+    constants.TlasNodeCount = static_cast<std::int32_t>(m_GpuScene.TlasNodes.size());
+    constants.SamplesPerDispatch = static_cast<std::int32_t>(samplesPerDispatch);
+    constants.MaxDepth = static_cast<std::int32_t>(maxDepth);
+    constants.AccumulatedSamples = accumulatedSamples;
+    constants.UseHdri = environment.HDRI ? 1u : 0u;
+    constants.EnvironmentIntensity = environment.intensity;
+    constants.CameraLookFromVerticalFov = glm::vec4(camera.LookFrom, camera.VerticalFov);
+    constants.CameraLookAtFocusDistance = glm::vec4(camera.LookAt, camera.FocusDistance);
+    constants.CameraVUpDefocusAngle = glm::vec4(camera.VUp, camera.DefocusAngle);
+    constants.EnvironmentRotation = glm::vec4(glm::radians(environment.rotation), 0.0f);
+    constants.SkyColor1 = glm::vec4(environment.color1, 0.0f);
+    constants.SkyColor2 = glm::vec4(environment.color2, 0.0f);
+    glBindBuffer(GL_UNIFORM_BUFFER, m_RenderConstantsBuffer);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(GpuRenderConstants), &constants);
+    glBindBufferBase(GL_UNIFORM_BUFFER, RenderConstantsBinding, m_RenderConstantsBuffer);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
+}
+
 void OpenGLRenderer::ResetAccumulation() {
     m_AccumulatedSamples = 0;
 }
 
 void OpenGLRenderer::Shutdown() {
     DestroySceneResources();
+    if (m_RenderConstantsBuffer != 0) {
+        glDeleteBuffers(1, &m_RenderConstantsBuffer);
+        m_RenderConstantsBuffer = 0;
+    }
+    if (m_FinalRenderTexture != 0) {
+        glDeleteTextures(1, &m_FinalRenderTexture);
+        m_FinalRenderTexture = 0;
+    }
+    DestroyOutputTexture();
     m_CompShader.reset();
     m_Window = nullptr;
 }
