@@ -22,7 +22,7 @@ public float3 rayColor(Ray ray, inout uint rngState) {
             radiance += throughput * emitted(material);
             Ray scattered;
             float3 attenuation;
-            if (!scatterMaterial(currentRay, rec, attenuation, scattered, material, rngState)) {
+            if (!scatterBsdf(currentRay, rec, material, attenuation, scattered, rngState)) {
                 break;
             }
             throughput *= attenuation;
