@@ -8,18 +8,19 @@ public struct Sphere {
 };
 
 public struct Material {
-    int type;
-    float3 albedo;
+    float3 baseColor;
     float opacity;
+
     float metallic;
     float roughness;
     float refractionIndex;
     float transmission;
+
     float3 emission;
     float emissionStrength;
+
     int baseColorTexture;
     int metallicRoughnessTexture;
-    float fuzz;
 };
 
 public struct Ray {
