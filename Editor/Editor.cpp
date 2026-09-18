@@ -164,6 +164,7 @@ void EditorLayer::DrawRenderPanel(Scene& scene, Renderer& renderer)
         int maxSamples = static_cast<int>(m_FinalRenderSettings.maxSamples);
         int samplesPerDispatch = static_cast<int>(m_FinalRenderSettings.samplesPerDispatch);
         int maxDepth = static_cast<int>(m_FinalRenderSettings.maxDepth);
+        auto outputPath = m_FinalRenderPath;
         if (ImGui::InputInt("Width##Final", &width)) {
             m_FinalRenderSettings.width = static_cast<std::uint32_t>(std::max(width, 1));
         }
@@ -179,7 +180,7 @@ void EditorLayer::DrawRenderPanel(Scene& scene, Renderer& renderer)
         if (ImGui::InputInt("Max Bounces##Final", &maxDepth)) {
             m_FinalRenderSettings.maxDepth = static_cast<std::uint32_t>(std::clamp(maxDepth, 1, 64));
         }
-        ImGui::InputText("Output", m_FinalRenderPath, sizeof(m_FinalRenderPath));
+        ImGui::InputText("Output", outputPath, sizeof(m_FinalRenderPath));
         ImGui::Spacing();
         const ImVec2 available = ImGui::GetContentRegionAvail();
         if (ImGui::Button("Final Render##FinalRenderButton", ImVec2(available.x, 35.0f))) {
