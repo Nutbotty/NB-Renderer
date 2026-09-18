@@ -39,6 +39,12 @@ float3 fresnelSchlick(float cosTheta, float3 F0) {
     return F0 + (float3(1.0f) - F0) * pow(1.0f - clamp(cosTheta, 0.0f, 1.0f), 5.0f);
 }
 
+float dielectricF0(float ior) {
+    ior = max(ior, 1.0001f);
+    float r = (ior - 1.0f) / (ior + 1.0f);
+    return r * r;
+}
+
 float ggxDistribution(float NoH, float alpha) {
     float alpha2 = alpha * alpha;
     float f = NoH * NoH * (alpha2 - 1.0f) + 1.0f;
@@ -152,7 +158,8 @@ public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 
     }
 
     float alpha = max(roughness * roughness, 0.001f);
-    float3 F0 = lerp(float3(0.04f), baseColor, metallic);
+    float dielectricReflectance = dielectricF0(material.refractionIndex);
+    float3 F0 = lerp(float3(dielectricReflectance), baseColor, metallic);
     float3 Fv = fresnelSchlick(NoV, F0);
 
     float3 diffuseColor = (float3(1.0f) - Fv) * (1.0f - metallic) * baseColor;
