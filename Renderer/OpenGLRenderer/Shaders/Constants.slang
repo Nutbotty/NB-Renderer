@@ -1,12 +1,6 @@
 #language slang 2026
 module Constants;
 
-public static const int MATERIAL_LAMBERTIAN = 0;
-public static const int MATERIAL_METAL = 1;
-public static const int MATERIAL_DIELECTRIC = 2;
-public static const int MATERIAL_VOLUME = 3;
-public static const int MATERIAL_PBR_METAL_ROUGH = 4;
-
 public static const int PRIMITIVE_SPHERE = 0;
 public static const int PRIMITIVE_QUAD = 1;
 public static const int PRIMITIVE_TRI = 2;
