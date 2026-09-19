@@ -25,6 +25,14 @@ public Material loadMaterial(int index) {
     return material;
 }
 
+float3 toLocal(float3 v, float3 T, float3 B, float3 N) {
+    return float3(dot(v, T), dot(v, B), dot(v, N));
+}
+
+float3 toWorld(float3 v, float3 T, float3 B, float3 N) {
+    return T * v.x + B * v.y + N * v.z;
+}
+
 public float3 emitted(Material material) {
     return material.emission * material.emissionStrength;
 }
@@ -98,6 +106,12 @@ void buildBasis(float3 N, out float3 T, out float3 B) {
 }
 
 //ggx importance sampling
+float smithGgxG1(float NoV, float alpha) {
+    float alpha2 = alpha * alpha;
+    float NoV2 = NoV * NoV;
+    return (2.0f * NoV) / max(NoV + sqrt(alpha2 + (1.0f - alpha2) * NoV2), EPSILON);
+}
+
 float3 sampleGgxHalfVector(float3 N, float alpha, inout uint rngState) {
     float u1 = randomFloat(rngState);
     float u2 = randomFloat(rngState);
@@ -113,6 +127,33 @@ float3 sampleGgxHalfVector(float3 N, float alpha, inout uint rngState) {
     return normalize(T * localH.x + B * localH.y + N * localH.z);
 }
 
+float3 sampleGgxVndf(float3 N, float3 V, float alpha, inout uint rngState) {
+    float3 T;
+    float3 B;
+    buildBasis(N, T, B);
+    float3 localV = toLocal(V, T, B, N);
+
+    float3 Vh = normalize(float3(alpha * localV.x, alpha * localV.y, localV.z));
+    float lensq = Vh.x * Vh.x + Vh.y * Vh.y;
+    float3 T1 = lensq > EPSILON ? float3(-Vh.y, Vh.x, 0.0f) / sqrt(lensq) : float3(1.0f, 0.0f, 0.0f);
+
+    float3 T2 = cross(Vh, T1);
+    float u1 = randomFloat(rngState);
+    float u2 = randomFloat(rngState);
+    float r = sqrt(u1);
+    float phi = TWO_PI * u2;
+    float t1 = r * cos(phi);
+    float t2 = r * sin(phi);
+    float s = 0.5f * (1.0f + Vh.z);
+
+    t2 = (1.0f - s) * sqrt(max(0.0f, 1.0f - t1 * t1)) + s * t2;
+    float3 Nh = t1 * T1 + t2 * T2 + sqrt(max(0.0f, 1.0f - t1 * t1 - t2 * t2)) * Vh;
+
+    float3 localH = normalize(float3(alpha * Nh.x, alpha * Nh.y, max(0.0f, Nh.z)));
+    return normalize(toWorld(localH, T, B, N));
+}
+
+// main bsdf logic
 public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 attenuation, out Ray scattered, inout uint rngState) {
     float3 baseColor;
     float metallic;
