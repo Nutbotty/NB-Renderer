@@ -112,21 +112,6 @@ float smithGgxG1(float NoV, float alpha) {
     return (2.0f * NoV) / max(NoV + sqrt(alpha2 + (1.0f - alpha2) * NoV2), EPSILON);
 }
 
-float3 sampleGgxHalfVector(float3 N, float alpha, inout uint rngState) {
-    float u1 = randomFloat(rngState);
-    float u2 = randomFloat(rngState);
-    float alpha2 = alpha * alpha;
-    float phi = TWO_PI * u1;
-    float cosTheta = sqrt((1.0f - u2) / max(1.0f + (alpha2 - 1.0f) * u2, EPSILON));
-    float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
-    float3 localH = float3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);
-
-    float3 T;
-    float3 B;
-    buildBasis(N, T, B);
-    return normalize(T * localH.x + B * localH.y + N * localH.z);
-}
-
 float3 sampleGgxVndf(float3 N, float3 V, float alpha, inout uint rngState) {
     float3 T;
     float3 B;
@@ -151,6 +136,20 @@ float3 sampleGgxVndf(float3 N, float3 V, float alpha, inout uint rngState) {
 
     float3 localH = normalize(float3(alpha * Nh.x, alpha * Nh.y, max(0.0f, Nh.z)));
     return normalize(toWorld(localH, T, B, N));
+}
+
+float ggxVndfReflectionPdf(float3 N, float3 V, float3 H, float alpha) {
+    float NoV = max(dot(N, V), 0.0f);
+    float NoH = max(dot(N, H), 0.0f);
+    float VoH = max(dot(V, H), 0.0f);
+
+    if (NoV <= EPSILON || NoH <= EPSILON || VoH <= EPSILON) {
+        return 0.0f;
+    }
+    float D = ggxDistribution(NoH, alpha);
+    float G1 = smithGgxG1(NoV, alpha);
+    float pdfH = D * G1 * VoH / NoV;
+    return pdfH / max(4.0f * VoH, EPSILON);
 }
 
 // main bsdf logic
@@ -218,7 +217,7 @@ public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 
     // Specular lobe
     // -------------------------------------------------------------------------
     if (randomFloat(rngState) < specularProbability) {
-        float3 H = sampleGgxHalfVector(N, alpha, rngState);
+        float3 H = sampleGgxVndf(N, V, alpha, rngState);
         float VoH = max(dot(V, H), 0.0f);
         float NoH = max(dot(N, H), 0.0f);
 
@@ -237,8 +236,7 @@ public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 
         float3 F = fresnelSchlick(VoH, F0);
         float3 brdf = D * visibility * F;
 
-        float pdfHalfVector = D * NoH;
-        float pdfSpecular = pdfHalfVector / max(4.0f * VoH, EPSILON);
+        float pdfSpecular = ggxVndfReflectionPdf(N, V, H, alpha);
 
         float combinedPdf = specularProbability * pdfSpecular;
         if (combinedPdf <= EPSILON) {
