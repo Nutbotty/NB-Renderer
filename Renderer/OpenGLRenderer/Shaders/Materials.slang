@@ -7,6 +7,18 @@ import GpuTypes;
 import Random;
 import Resources;
 
+struct SurfaceData {
+    float3 baseColor;
+    float metallic;
+    float roughness;
+    float alpha;
+
+    float transmission;
+    float ior;
+
+    float3 F0;
+};
+
 public Material loadMaterial(int index) {
     PackedMaterial gpuMaterial = materialBuffer[index];
 
@@ -76,31 +88,35 @@ float3 offsetRayOrigin(HitRecord rec, float3 direction) {
     return rec.p + rec.normal * side * RAY_EPSILON;
 }
 
-void evaluateMaterial(Material material, HitRecord rec, out float3 baseColor, out float metallic, out float roughness) {
-    baseColor = material.baseColor;
-    metallic = material.metallic;
-    roughness = material.roughness;
+SurfaceData evaluateSurface(Material material, HitRecord rec) {
+    SurfaceData surface;
+    surface.baseColor = material.baseColor;
+    surface.metallic = material.metallic;
+    surface.roughness = material.roughness;
+    surface.transmission = material.transmission;
+    surface.ior = max(material.refractionIndex, 1.0001f);
 
     if (material.baseColorTexture >= 0) {
         float4 texel = uBaseColorTextures.SampleLevel(float3(rec.uv, float(material.baseColorTexture)), 0.0f);
-        baseColor *= texel.rgb;
+        surface.baseColor *= texel.rgb;
     }
-
     if (material.metallicRoughnessTexture >= 0) {
         float4 mr = uMetalRoughTextures.SampleLevel(float3(rec.uv, float(material.metallicRoughnessTexture)), 0.0f);
-        roughness *= mr.g;
-        metallic *= mr.b;
+        surface.roughness *= mr.g;
+        surface.metallic *= mr.b;
     }
 
-    metallic = clamp(metallic, 0.0f, 1.0f);
-    roughness = clamp(roughness, 0.01f, 1.0f);
+    surface.metallic = clamp(surface.metallic, 0.0f, 1.0f);
+    surface.roughness = clamp(surface.roughness, 0.01f, 1.0f);
+    surface.transmission = clamp(surface.transmission, 0.0f, 1.0f);
+    surface.alpha = max(surface.roughness * surface.roughness, 0.001f);
+    float dielectricReflectance = dielectricF0(surface.ior);
+    surface.F0 = lerp(float3(dielectricReflectance), surface.baseColor, surface.metallic);
+    return surface;
 }
 
 void buildBasis(float3 N, out float3 T, out float3 B) {
-    float3 up = abs(N.z) < 0.999f
-        ? float3(0.0f, 0.0f, 1.0f)
-        : float3(1.0f, 0.0f, 0.0f);
-
+    float3 up = abs(N.z) < 0.999f ? float3(0.0f, 0.0f, 1.0f) : float3(1.0f, 0.0f, 0.0f);
     T = normalize(cross(up, N));
     B = cross(N, T);
 }
@@ -110,6 +126,48 @@ float smithGgxG1(float NoV, float alpha) {
     float alpha2 = alpha * alpha;
     float NoV2 = NoV * NoV;
     return (2.0f * NoV) / max(NoV + sqrt(alpha2 + (1.0f - alpha2) * NoV2), EPSILON);
+}
+
+float3 sampleCosineHemisphere(float3 N, inout uint rngState) {
+    float u1 = randomFloat(rngState);
+    float u2 = randomFloat(rngState);
+    float r = sqrt(u1);
+    float phi = TWO_PI * u2;
+    float3 localDirection = float3(r * cos(phi), r * sin(phi), sqrt(max(0.0f, 1.0f - u1)));
+    float3 T;
+    float3 B;
+    buildBasis(N, T, B);
+    return normalize(toWorld(localDirection, T, B, N));
+}
+
+bool sampleDiffuse(float3 N, float3 diffuseColor, float lobeProbability, out float3 direction, out float3 weight, inout uint rngState) {
+    direction = sampleCosineHemisphere(N, rngState);
+    float NoL = max(dot(N, direction), 0.0f);
+    if (NoL <= EPSILON || lobeProbability <= EPSILON) {
+        return false;
+    }
+    weight = diffuseColor / lobeProbability;
+    return true;
+}
+
+float3 evaluateGgxSingleScatter(float3 N, float3 V, float3 L, SurfaceData surface) {
+    float NoV = max(dot(N, V), 0.0f);
+    float NoL = max(dot(N, L), 0.0f);
+    if (NoV <= EPSILON || NoL <= EPSILON) {
+        return float3(0.0f);
+    }
+
+    float3 H = normalize(V + L);
+    float NoH = max(dot(N, H), 0.0f);
+    float VoH = max(dot(V, H), 0.0f);
+    if (NoH <= EPSILON || VoH <= EPSILON) {
+        return float3(0.0f);
+    }
+
+    float D = ggxDistribution(NoH, surface.alpha);
+    float visibility = smithGgxCorrelatedVisibility(NoV, NoL, surface.alpha);
+    float3 F = fresnelSchlick(VoH, surface.F0);
+    return D * visibility * F;
 }
 
 float3 sampleGgxVndf(float3 N, float3 V, float alpha, inout uint rngState) {
@@ -152,44 +210,50 @@ float ggxVndfReflectionPdf(float3 N, float3 V, float3 H, float alpha) {
     return pdfH / max(4.0f * VoH, EPSILON);
 }
 
-// main bsdf logic
-public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 attenuation, out Ray scattered, inout uint rngState) {
-    float3 baseColor;
-    float metallic;
-    float roughness;
-    evaluateMaterial(material, rec, baseColor, metallic, roughness);
-
-    // -------------------------------------------------------------------------
-    // Transmission / dielectric refraction
-    // -------------------------------------------------------------------------
-    float transmission = clamp(material.transmission, 0.0f, 1.0f);
-    float transmissionProbability = transmission * (1.0f - metallic);
-    if (transmissionProbability > 0.0f && randomFloat(rngState) < transmissionProbability) {
-        float refractionIndex = max(material.refractionIndex, 1.0f);
-        float eta = rec.frontFace ? 1.0f / refractionIndex : refractionIndex;
-
-        float3 unitDirection = normalize(rayIn.direction);
-        float cosTheta = min(dot(-unitDirection, rec.normal), 1.0f);
-        float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
-        bool cannotRefract = eta * sinTheta > 1.0f;
-
-        float3 direction;
-        if (cannotRefract || reflectance(cosTheta, eta) > randomFloat(rngState)) {
-            direction = reflect(unitDirection, rec.normal);
-            attenuation = float3(1.0f);
-        } else {
-            direction = refract(unitDirection, rec.normal, eta);
-            attenuation = baseColor;
-        }
-
-        scattered.direction = direction;
-        scattered.origin = offsetRayOrigin(rec, direction);
-        return true;
+bool sampleGgxReflection(float3 N, float3 V, SurfaceData surface, float lobeProbability, out float3 direction, out float3 weight, inout uint rngState) {
+    float3 H = sampleGgxVndf(N, V, surface.alpha, rngState);
+    float VoH = max(dot(V, H), 0.0f);
+    if (VoH <= EPSILON) {
+        return false;
     }
 
-    // -------------------------------------------------------------------------
-    // Opaque metallic-roughness BSDF
-    // -------------------------------------------------------------------------
+    float3 L = reflect(-V, H);
+    float NoL = max(dot(N, L), 0.0f);
+    if (NoL <= EPSILON) {
+        return false;
+    }
+
+    float pdf = ggxVndfReflectionPdf(N, V, H, surface.alpha);
+    pdf *= lobeProbability;
+    if (pdf <= EPSILON) {
+        return false;
+    }
+
+    float3 brdf = evaluateGgxSingleScatter(N, V, L, surface);
+    direction = L;
+    weight = brdf * NoL / pdf;
+    return true;
+}
+
+bool sampleTransmission(Ray rayIn, HitRecord rec, SurfaceData surface, out float3 direction, out float3 weight, inout uint rngState) {
+    float eta = rec.frontFace ? 1.0f / surface.ior : surface.ior;
+    float3 unitDirection = normalize(rayIn.direction);
+    float cosTheta = min(dot(-unitDirection, rec.normal),1.0f);
+    float sinTheta = sqrt(max(0.0f, 1.0f - cosTheta * cosTheta));
+    bool cannotRefract = eta * sinTheta > 1.0f;
+    if (cannotRefract || reflectance(cosTheta, eta) > randomFloat(rngState)) {
+        direction = reflect(unitDirection, rec.normal);
+        weight = float3(1.0f);
+    } else {
+        direction = refract(unitDirection, rec.normal, eta);
+        weight = surface.baseColor;
+    }
+    return true;
+}
+
+// main bsdf logic
+public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 attenuation, out Ray scattered, inout uint rngState) {
+    SurfaceData surface = evaluateSurface(material, rec);
     float3 N = rec.normal;
     float3 V = normalize(-rayIn.direction);
     float NoV = max(dot(N, V), 0.0f);
@@ -197,68 +261,50 @@ public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 
         return false;
     }
 
-    float alpha = max(roughness * roughness, 0.001f);
-    float dielectricReflectance = dielectricF0(material.refractionIndex);
-    float3 F0 = lerp(float3(dielectricReflectance), baseColor, metallic);
-    float3 Fv = fresnelSchlick(NoV, F0);
+    // ---------------------------------------------------------------------
+    // Transmission
+    // ---------------------------------------------------------------------
+    float transmissionProbability = surface.transmission * (1.0f - surface.metallic);
+    if (transmissionProbability > 0.0f && randomFloat(rngState) < transmissionProbability) {
+        float3 direction;
+        float3 weight;
+        if (!sampleTransmission(rayIn, rec, surface, direction, weight, rngState)) {
+            return false;
+        }
+        scattered.direction = direction;
+        scattered.origin = offsetRayOrigin(rec, direction);
+        attenuation = weight;
+        return true;
+    }
 
-    float3 diffuseColor = (float3(1.0f) - Fv) * (1.0f - metallic) * baseColor;
+    // ---------------------------------------------------------------------
+    // Opaque reflection
+    // ---------------------------------------------------------------------
+    float3 Fv = fresnelSchlick(NoV, surface.F0);
+    float3 diffuseColor = (float3(1.0f) - Fv) * (1.0f - surface.metallic) * surface.baseColor;
     float diffuseEnergy = luminance(diffuseColor);
     float specularEnergy = luminance(Fv);
     float totalEnergy = diffuseEnergy + specularEnergy;
-
     if (totalEnergy <= EPSILON) {
         return false;
     }
     float specularProbability = clamp(specularEnergy / totalEnergy, 0.05f, 0.95f);
     float diffuseProbability = 1.0f - specularProbability;
 
-    // -------------------------------------------------------------------------
-    // Specular lobe
-    // -------------------------------------------------------------------------
+    float3 direction;
+    float3 weight;
     if (randomFloat(rngState) < specularProbability) {
-        float3 H = sampleGgxVndf(N, V, alpha, rngState);
-        float VoH = max(dot(V, H), 0.0f);
-        float NoH = max(dot(N, H), 0.0f);
-
-        if (VoH <= EPSILON || NoH <= EPSILON) {
+        if (!sampleGgxReflection(N, V, surface, specularProbability, direction, weight, rngState)) {
             return false;
         }
-
-        float3 L = reflect(-V, H);
-        float NoL = max(dot(N, L), 0.0f);
-        if (NoL <= EPSILON) {
+    } else {
+        if (!sampleDiffuse(N, diffuseColor, diffuseProbability, direction, weight, rngState)) {
             return false;
         }
-
-        float D = ggxDistribution(NoH, alpha);
-        float visibility = smithGgxCorrelatedVisibility(NoV, NoL, alpha);
-        float3 F = fresnelSchlick(VoH, F0);
-        float3 brdf = D * visibility * F;
-
-        float pdfSpecular = ggxVndfReflectionPdf(N, V, H, alpha);
-
-        float combinedPdf = specularProbability * pdfSpecular;
-        if (combinedPdf <= EPSILON) {
-            return false;
-        }
-
-        scattered.direction = L;
-        scattered.origin = offsetRayOrigin(rec, L);
-        attenuation = brdf * NoL / combinedPdf;
-        return true;
     }
 
-    // -------------------------------------------------------------------------
-    // Diffuse lobe
-    // -------------------------------------------------------------------------
-    float3 direction = N + randomUnitVector(rngState);
-    if (nearZero(direction)) {
-        direction = N;
-    }
     scattered.direction = direction;
     scattered.origin = offsetRayOrigin(rec, direction);
-    attenuation = diffuseColor / diffuseProbability;
-
+    attenuation = weight;
     return true;
 }
