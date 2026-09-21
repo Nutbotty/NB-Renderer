@@ -59,6 +59,11 @@ float3 fresnelSchlick(float cosTheta, float3 F0) {
     return F0 + (float3(1.0f) - F0) * pow(1.0f - clamp(cosTheta, 0.0f, 1.0f), 5.0f);
 }
 
+float3 averageSchlickFresnel(float3 F0) {
+    //F90 = 1
+    return (float3(1.0f) + 20.0f * F0) / 21.0f;
+}
+
 float dielectricF0(float ior) {
     ior = max(ior, 1.0001f);
     float r = (ior - 1.0f) / (ior + 1.0f);
@@ -76,6 +81,23 @@ float smithGgxCorrelatedVisibility(float NoV, float NoL, float alpha) {
     float lambdaV = NoL * sqrt(NoV * NoV * (1.0f - alpha2) + alpha2);
     float lambdaL = NoV * sqrt(NoL * NoL * (1.0f - alpha2) + alpha2);
     return 0.5f / max(lambdaV + lambdaL, EPSILON);
+}
+
+//from enterprise pbr, TODO switch to LuT
+float ggxDirectionalAlbedo(float NoX, float alpha) {
+    NoX = clamp(NoX, 0.0f, 1.0f);
+    float alphaUv = alpha * alpha;
+    float roughnessTerm = -0.20277f + alphaUv * (2.772f + alphaUv * (-2.6175f + 0.73343f * alphaUv));
+    float viewTerm = 3.09507f + NoX * (-9.11369f + NoX * (15.8884f + NoX * (-13.70343f + 4.51786f * NoX)));
+    float E = 1.0f - 1.4594f * alphaUv * NoX * roughnessTerm * viewTerm;
+    return clamp(E, 0.0f, 1.0f);
+}
+
+//from enterprise pbr, TODO switch to LuT
+float ggxAverageAlbedo(float alpha) {
+    float alphaUv = alpha * alpha;
+    float Eavg = 1.0f + alphaUv * (-0.113f + alphaUv * (-1.8695f + alphaUv * (2.2268f - 0.83397f * alphaUv)));
+    return clamp(Eavg, 0.0f, 1.0f);
 }
 
 float luminance(float3 color) {
@@ -170,6 +192,36 @@ float3 evaluateGgxSingleScatter(float3 N, float3 V, float3 L, SurfaceData surfac
     return D * visibility * F;
 }
 
+float3 evaluateGgxMultiScatter(float3 N, float3 V, float3 L, SurfaceData surface) {
+    float NoV = max(dot(N, V), 0.0f);
+    float NoL = max(dot(N, L), 0.0f);
+    if (NoV <= EPSILON || NoL <= EPSILON) {
+        return float3(0.0f);
+    }
+
+    float Ev = ggxDirectionalAlbedo(NoV, surface.alpha);
+    float El = ggxDirectionalAlbedo(NoL, surface.alpha);
+    float Eavg = ggxAverageAlbedo(surface.alpha);
+
+    float missingAverageEnergy = 1.0f - Eavg;
+    if (missingAverageEnergy <= 1.0e-5f) {
+        return float3(0.0f);
+    }
+
+    float multiScatter = ((1.0f - Ev) * (1.0f - El)) / (PI * missingAverageEnergy);
+    float3 Favg =averageSchlickFresnel(surface.F0);
+    float3 numerator = Favg * Favg * Eavg;
+    float3 denominator = float3(1.0f) - Favg * (1.0f - Eavg);
+    float3 Fms = numerator / max(denominator, float3(EPSILON));
+    return multiScatter * Fms;
+}
+
+float3 evaluateGgxReflection(float3 N, float3 V, float3 L, SurfaceData surface) {
+    float3 singleScatter = evaluateGgxSingleScatter(N, V, L, surface);
+    float3 multiScatter = evaluateGgxMultiScatter(N, V, L, surface);
+    return singleScatter + multiScatter;
+}
+
 float3 sampleGgxVndf(float3 N, float3 V, float alpha, inout uint rngState) {
     float3 T;
     float3 B;
@@ -229,7 +281,7 @@ bool sampleGgxReflection(float3 N, float3 V, SurfaceData surface, float lobeProb
         return false;
     }
 
-    float3 brdf = evaluateGgxSingleScatter(N, V, L, surface);
+    float3 brdf = evaluateGgxReflection(N, V, L, surface);
     direction = L;
     weight = brdf * NoL / pdf;
     return true;
@@ -281,9 +333,14 @@ public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 
     // Opaque reflection
     // ---------------------------------------------------------------------
     float3 Fv = fresnelSchlick(NoV, surface.F0);
+    float Ev = ggxDirectionalAlbedo(NoV, surface.alpha);
+    float Eavg = ggxAverageAlbedo(surface.alpha);
+    float3 Favg = averageSchlickFresnel(surface.F0);
+    float3 Fms = (Favg * Favg * Eavg) / max(float3(1.0f) - Favg * (1.0f - Eavg), float3(EPSILON));
+    float3 specularEstimate = Fv * Ev + Fms * (1.0f - Ev);
     float3 diffuseColor = (float3(1.0f) - Fv) * (1.0f - surface.metallic) * surface.baseColor;
     float diffuseEnergy = luminance(diffuseColor);
-    float specularEnergy = luminance(Fv);
+    float specularEnergy = luminance(specularEstimate);
     float totalEnergy = diffuseEnergy + specularEnergy;
     if (totalEnergy <= EPSILON) {
         return false;
