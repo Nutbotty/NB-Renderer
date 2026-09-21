@@ -7,7 +7,7 @@ import GpuTypes;
 import Random;
 import Resources;
 
-struct SurfaceData {
+public struct SurfaceData {
     float3 baseColor;
     float metallic;
     float roughness;
