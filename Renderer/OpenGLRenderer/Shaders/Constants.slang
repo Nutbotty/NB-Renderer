@@ -13,5 +13,6 @@ public static const float PI = 3.14159265358979323846f;
 public static const float TWO_PI = 6.28318530717958647692f;
 public static const float EPSILON = 1.0e-8f;
 public static const float RAY_EPSILON = 1.0e-3f;
+public static const float RAY_T_MIN = 1e-5;
 public static const float MAX_RAY_DISTANCE = 1.0e30f;
 

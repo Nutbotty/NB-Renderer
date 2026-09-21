@@ -15,7 +15,7 @@ public float3 rayColor(Ray ray, inout uint rngState) {
     float3 radiance = float3(0.0f);
     for (int bounce = 0; bounce < gRender.uMaxDepth; ++bounce) {
         HitRecord rec;
-        if (hitWorld(currentRay, makeInterval(RAY_EPSILON, MAX_RAY_DISTANCE), rec)) {
+        if (hitWorld(currentRay, makeInterval(RAY_T_MIN, MAX_RAY_DISTANCE), rec)) {
             // normals test/debug, add variable later
             // return rec.normal * 0.5f + 0.5f;
             Material material = loadMaterial(rec.material);
