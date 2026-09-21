@@ -1,6 +1,7 @@
 #language slang 2026
 module Geometry;
 
+
 import Constants;
 import Types;
 import GpuTypes;
@@ -47,7 +48,7 @@ public bool hitSphere(Sphere sphere, Ray ray, Interval rayT, out HitRecord recor
     record.t = root;
     record.p = rayAt(ray, record.t);
     float3 outwardNormal = (record.p - sphere.center) / sphere.radius;
-    setFaceNormal(ray, outwardNormal, record);
+    setSurfaceNormals(ray, outwardNormal, outwardNormal, record);
     record.material = sphere.material;
     record.uv = float2(0.0f);
     return true;
@@ -85,7 +86,7 @@ public bool hitQuad(int quadIndex, Ray ray, Interval rayT, out HitRecord record)
     record.p = intersection;
     record.material = quad.metadata.x;
     record.uv = float2(alpha, beta);
-    setFaceNormal(ray, normal, record);
+    setSurfaceNormals(ray, normal, normal, record);
     return true;
 }
 
@@ -121,7 +122,7 @@ public bool hitTri(int triIndex, Ray ray, Interval rayT, out HitRecord record) {
     record.p = rayAt(ray, t);
     record.material = tri.metadata.x;
     record.uv = float2(u, v);
-    setFaceNormal(ray, normal, record);
+    setSurfaceNormals(ray, normal, normal, record);
     return true;
 }
 
@@ -158,20 +159,19 @@ public bool hitMeshTri(int triIndex, Ray ray, Interval rayT, out HitRecord recor
     record.t = t;
     record.p = rayAt(ray, t);
 
-    // Material is still an object-local slot here.
     record.material = tri.metadata.w;
     float w = 1.0f - u - v;
     float3 n0 = meshVertexBuffer[index0].normal.xyz;
     float3 n1 = meshVertexBuffer[index1].normal.xyz;
     float3 n2 = meshVertexBuffer[index2].normal.xyz;
+
+    float3 geometricNormal = normalize(cross(edge1, edge2));
     float3 interpolatedNormal = w * n0 + u * n1 + v * n2;
-    float3 outwardNormal;
+    float3 shadingNormal = geometricNormal;
     if (dot(interpolatedNormal, interpolatedNormal) > EPSILON) {
-        outwardNormal = normalize(interpolatedNormal);
-    } else {
-        outwardNormal = normalize(cross(edge1, edge2));
+        shadingNormal = normalize(interpolatedNormal);
     }
-    setFaceNormal(ray, outwardNormal, record);
+    setSurfaceNormals(ray, geometricNormal, shadingNormal, record);
     float2 uv0 = meshVertexBuffer[index0].texCoord.xy;
     float2 uv1 = meshVertexBuffer[index1].texCoord.xy;
     float2 uv2 = meshVertexBuffer[index2].texCoord.xy;

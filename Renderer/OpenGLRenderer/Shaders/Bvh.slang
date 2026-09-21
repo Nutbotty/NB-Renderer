@@ -115,10 +115,12 @@ public bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray ray, Interval rayT
     // localRay.direction intentionally remains unnormalized so localRecord.t
     // stays compatible with the original world-space ray.
     record.p = rayAt(ray, localRecord.t);
-    float3 localOutwardNormal = localRecord.frontFace ? localRecord.normal : -localRecord.normal;
+    float3 localOutwardGeometricNormal = localRecord.frontFace ? localRecord.geometricNormal : -localRecord.geometricNormal;
+    float3 localOutwardShadingNormal = localRecord.frontFace ? localRecord.normal : -localRecord.normal;
     float3x3 normalToWorld = transpose((float3x3)worldToObject);
-    float3 worldOutwardNormal = normalize(mul(localOutwardNormal, normalToWorld));
-    setFaceNormal(ray, worldOutwardNormal, record);
+    float3 worldOutwardGeometricNormal = normalize(mul(localOutwardGeometricNormal, normalToWorld));
+    float3 worldOutwardShadingNormal = normalize(mul(localOutwardShadingNormal, normalToWorld));
+    setSurfaceNormals(ray, worldOutwardGeometricNormal, worldOutwardShadingNormal, record);
     if (primitiveType == PRIMITIVE_MESH) {
         int materialSlot = record.material;
         int materialIndex = materialOffset + materialSlot;

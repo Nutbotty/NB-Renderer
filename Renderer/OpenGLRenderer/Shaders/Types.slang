@@ -42,6 +42,7 @@ public struct HitRecord {
     float3 p;
     float t;
     float3 normal;
+    float3 geometricNormal;
     float2 uv;
     bool frontFace;
     int material;

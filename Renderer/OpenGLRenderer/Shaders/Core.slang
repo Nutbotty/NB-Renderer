@@ -37,9 +37,21 @@ public float3 rayAt(Ray ray, float t) {
     return ray.origin + t * ray.direction;
 }
 
-public void setFaceNormal(Ray ray, float3 outwardNormal, inout HitRecord record) {
-    record.frontFace = dot(ray.direction, outwardNormal) < 0.0f;
-    record.normal = record.frontFace ? outwardNormal : -outwardNormal;
+public void setSurfaceNormals(Ray ray, float3 outwardGeometricNormal, float3 outwardShadingNormal, inout HitRecord record) {
+    outwardGeometricNormal = normalize(outwardGeometricNormal);
+    outwardShadingNormal = normalize(outwardShadingNormal);
+    if (dot(outwardShadingNormal, outwardGeometricNormal) < 0.0f) {
+        outwardShadingNormal = -outwardShadingNormal;
+    }
+
+    record.frontFace = dot(ray.direction, outwardGeometricNormal) < 0.0f;
+    if (record.frontFace) {
+        record.geometricNormal = outwardGeometricNormal;
+        record.normal = outwardShadingNormal;
+    } else {
+        record.geometricNormal = -outwardGeometricNormal;
+        record.normal = -outwardShadingNormal;
+    }
 }
 
 public float intervalSize(Interval interval) {
