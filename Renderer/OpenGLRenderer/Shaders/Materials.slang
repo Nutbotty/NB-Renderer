@@ -169,6 +169,12 @@ float dielectricFresnel(float VdotH, float eta) {
     return 0.5f * (rs * rs + rp * rp);
 }
 
+float dielectricF0(float ior) {
+    ior = max(ior, 1.0001f);
+    float r = (ior - 1.0f) / (ior + 1.0f);
+    return r * r;
+}
+
 float ggxDistribution(float NoH, float alpha) {
     float alpha2 = alpha * alpha;
     float f = NoH * NoH * (alpha2 - 1.0f) + 1.0f;
@@ -432,10 +438,11 @@ public BxDFEval evaluateBSDF(float3 N, float3 V, float3 L, SurfaceData surface) 
         float FView = dielectricFresnel(NoV, surface.eta);
 
         if (metallicProbability > EPSILON) {
-            float3 FMetal = fresnelSchlick(VoH, surface.baseColor);
+            float3 F0 = surface.baseColor;
+            float3 FMetal = fresnelSchlick(VoH, F0);
             BxDFEval metallicEval = evaluateGgxReflection(N, V, L, surface.alpha, FMetal);
-
-            result.BxDF += metallicEval.BxDF * metallicProbability;
+            float3 multiScatter = evaluateGgxMultiScatter(N, V, L, surface.alpha, F0);
+            result.BxDF += (metallicEval.BxDF + multiScatter) * metallicProbability;
             result.PDF += metallicEval.PDF * metallicProbability;
         }
 
