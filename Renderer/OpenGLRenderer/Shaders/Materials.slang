@@ -185,6 +185,28 @@ float smithGgxG1(float NoV, float alpha) {
     return (2.0f * NoV) / max(NoV + sqrt(alpha2 + (1.0f - alpha2) * NoV2), EPSILON);
 }
 
+// Enterprise directional albedo, eventually replace with LUT
+float ggxDirectionalAlbedo(float NoX, float alpha) {
+    NoX = clamp(NoX, 0.0f, 1.0f);
+    float alphaUv = alpha * alpha;
+    float a = -0.20277f + alphaUv * (2.772f + alphaUv * (-2.6175f + 0.73343f * alphaUv));
+    float b = 3.09507f + NoX * (-9.11369f + NoX * (15.8884f + NoX * (-13.70343f + 4.51786f * NoX)));
+    float E = 1.0f - 1.4594f * alphaUv * NoX * a * b;
+    return clamp(E, 0.0f, 1.0f);
+}
+
+// Enterprise average albedo, eventually replace with LUT
+float ggxAverageAlbedo(float alpha) {
+    float alphaUv = alpha * alpha;
+    float Eavg = 1.0f + alphaUv * (-0.113f + alphaUv * (-1.8695f + alphaUv * (2.2268f - 0.83397f * alphaUv)));
+    return clamp(Eavg, 0.0f, 1.0f);
+}
+
+float3 averageSchlickFresnel(float3 F0) {
+    return (float3(1.0f) + 20.0f * F0) / 21.0f;
+}
+
+
 float3 sampleCosineHemisphere(float3 N, inout uint rngState) {
     float u1 = randomFloat(rngState);
     float u2 = randomFloat(rngState);
@@ -348,6 +370,30 @@ BxDFEval evaluateGgxRefraction(float3 N, float3 V, float3 L, SurfaceData surface
     result.PDF = pdfH * jacobian;
     result.BxDF = surface.baseColor * D * GV * GL * eta2 / denominator2 * (abs(VdotH) * abs(LdotH) / max(NoV, EPSILON));
     return result;
+}
+
+// Enterprise PBR multi-scatter, uses kulla conty model
+float3 evaluateGgxMultiScatter(float3 N, float3 V, float3 L, float alpha, float3 F0) {
+    float NoV = dot(N, V);
+    float NoL = dot(N, L);
+    if (NoV <= EPSILON || NoL <= EPSILON) {
+        return float3(0.0f);
+    }
+
+    float Ev = ggxDirectionalAlbedo(NoV, alpha);
+    float El = ggxDirectionalAlbedo(NoL, alpha);
+    float Eavg = ggxAverageAlbedo(alpha);
+
+    float missingAverageEnergy = 1.0f - Eavg;
+    if (missingAverageEnergy <= 1.0e-5f) {
+        return float3(0.0f);
+    }
+
+    float Mms = ((1.0f - Ev) * (1.0f - El)) / (PI * missingAverageEnergy);
+    float3 Favg = averageSchlickFresnel(F0);
+    float3 denominator = float3(1.0f) - Favg * (1.0f - Eavg);
+    float3 Fms = (Favg * Favg * Eavg) / max(denominator, float3(EPSILON));
+    return Mms * Fms * NoL;
 }
 
 public BxDFEval evaluateBSDF(float3 N, float3 V, float3 L, SurfaceData surface) {
