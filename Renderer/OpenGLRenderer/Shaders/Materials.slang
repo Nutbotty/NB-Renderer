@@ -448,19 +448,13 @@ public BxDFEval evaluateBSDF(float3 N, float3 V, float3 L, SurfaceData surface) 
 
         if (dielectricProbability > EPSILON) {
             BxDFEval diffuseEval = evaluateDiffuse(N, L, surface.baseColor);
-
             result.BxDF += diffuseEval.BxDF * dielectricProbability * (1.0f - FDielectric);
             result.PDF += diffuseEval.PDF * dielectricProbability * (1.0f - FView);
 
-            BxDFEval specularEval = evaluateGgxReflection(
-                N,
-                V,
-                L,
-                surface.alpha,
-                float3(1.0f)
-            );
-
-            result.BxDF += specularEval.BxDF * dielectricProbability * FDielectric;
+            BxDFEval specularEval = evaluateGgxReflection(N, V, L, surface.alpha, float3(FDielectric));
+            float F0Scalar = dielectricF0(surface.ior);
+            float3 multiScatter = evaluateGgxMultiScatter(N, V, L, surface.alpha, float3(F0Scalar));
+            result.BxDF += (specularEval.BxDF + multiScatter) * dielectricProbability;
             result.PDF += specularEval.PDF * dielectricProbability * FView;
         }
 
