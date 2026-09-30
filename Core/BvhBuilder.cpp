@@ -383,6 +383,7 @@ BvhBuildResult BvhBuilder::Build(const Scene &scene, std::uint32_t tlasLeafSize,
             GpuMeshVertex gpuMeshVertex;
             gpuMeshVertex.Position = glm::vec4(vertex.position, 0.0f);
             gpuMeshVertex.Normal = glm::vec4(vertex.normal, 0.0f);
+            gpuMeshVertex.Tangent = vertex.tangent;
             gpuMeshVertex.TexCoord = glm::vec4(vertex.texCoord, 0.0f, 0.0f);
             result.MeshVertices.push_back(gpuMeshVertex);
         }

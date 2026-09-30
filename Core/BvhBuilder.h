@@ -59,6 +59,7 @@ struct alignas(16) GpuTri {
 struct alignas(16) GpuMeshVertex {
     glm::vec4 Position{0.0f};
     glm::vec4 Normal{0.0f};
+    glm::vec4 Tangent;
     // xy = TEXCOORD_0
     glm::vec4 TexCoord;
 };
