@@ -61,13 +61,16 @@ struct SceneMaterial {
 
     glm::vec3 emission{0.0, 0.0, 0.0};
     float emissionStrength = 0.0;
+    float normalScale = 1.0f;
 
     TextureId baseColorTexture = InvalidTextureId;
     TextureId metallicRoughnessTexture = InvalidTextureId;
     TextureId emissiveTexture = InvalidTextureId;
+    TextureId normalTexture = InvalidTextureId;
     std::uint32_t baseColorTexCoord = 0;
     std::uint32_t metallicRoughnessTexCoord = 0;
     std::uint32_t emissiveTexCoord = 0;
+    std::uint32_t normalTexCoord = 0;
 
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
     float fuzz = 0.0f;
@@ -124,6 +127,7 @@ struct SceneMeshVertex {
     glm::vec3 position{0.0f};
     glm::vec3 normal{0.0f};
     glm::vec2 texCoord{0.0f};
+    glm::vec4 tangent{0.0f};
 };
 struct SceneMeshTriangle {
     std::uint32_t index0 = 0;
