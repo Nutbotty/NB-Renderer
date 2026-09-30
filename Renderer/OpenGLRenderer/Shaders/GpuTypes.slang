@@ -46,6 +46,7 @@ public struct PackedPrimitiveRef {
 public struct PackedMeshVertex {
     float4 position;
     float4 normal;
+    float4 tangent;
     float4 texCoord;
 };
 
