@@ -104,6 +104,8 @@ public bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray ray, Interval rayT
         }
         return true;
     }
+
+    float4x4 objectToWorld = transformBuffer[transformIndex].objectToWorld;
     float4x4 worldToObject = transformBuffer[transformIndex].worldToObject;
     Ray localRay = transformRay(worldToObject, ray);
     HitRecord localRecord;
@@ -112,15 +114,28 @@ public bool hitPrimitive(PackedPrimitiveRef primitiveRef, Ray ray, Interval rayT
     }
     record = localRecord;
 
-    // localRay.direction intentionally remains unnormalized so localRecord.t
-    // stays compatible with the original world-space ray.
+    // localRay.direction intentionally remains unnormalized so localRecord.t stays compatible with the original world-space ray.
     record.p = rayAt(ray, localRecord.t);
     float3 localOutwardGeometricNormal = localRecord.frontFace ? localRecord.geometricNormal : -localRecord.geometricNormal;
     float3 localOutwardShadingNormal = localRecord.frontFace ? localRecord.normal : -localRecord.normal;
+
     float3x3 normalToWorld = transpose((float3x3)worldToObject);
     float3 worldOutwardGeometricNormal = normalize(mul(localOutwardGeometricNormal, normalToWorld));
     float3 worldOutwardShadingNormal = normalize(mul(localOutwardShadingNormal, normalToWorld));
     setSurfaceNormals(ray, worldOutwardGeometricNormal, worldOutwardShadingNormal, record);
+
+    record.tangent = float3(0.0f);
+    if (dot(localRecord.tangent, localRecord.tangent) > EPSILON) {
+    float3 worldTangent = transformVector(objectToWorld, localRecord.tangent);
+    worldTangent -= record.normal * dot(record.normal, worldTangent);
+    if (dot(worldTangent, worldTangent) > EPSILON) {
+            record.tangent = normalize(worldTangent);
+        }
+    }
+    // should be unneeded for gltf
+    float transformHandedness = determinant((float3x3)objectToWorld) < 0.0f ? -1.0f : 1.0f;
+    record.tangentSign = localRecord.tangentSign * transformHandedness;
+
     if (primitiveType == PRIMITIVE_MESH) {
         int materialSlot = record.material;
         int materialIndex = materialOffset + materialSlot;
