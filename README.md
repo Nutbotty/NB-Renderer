@@ -5,6 +5,8 @@ A PBR GPU compute shader path tracing application written in C++ and Slang.
 This project is a practical application of the modern offline rendering framework outlined by the PBRT textbook.
 It is written in  c++ and Slang, and supports OpenGL, Vulkan, and DirectX12
 
+![DragonClose](ImageOutputFiles/DragonClose.png)
+*Dielectric GGX multiscatter. 3840 x 2160, 1024 samples*
 
 ## Features
 
@@ -28,11 +30,19 @@ It is written in  c++ and Slang, and supports OpenGL, Vulkan, and DirectX12
 The openGL implementation exists as an exercise to understand and work directly with bvh acceleration structures.
 The vulkan implementation will make use of the KHR extensions.
 
+![CornellDark](ImageOutputFiles/CornellDark.png)
+*Cornell box showing current lack of NEE. 3840 x 2160, 1024 samples*
+![Cornell Bright](ImageOutputFiles/CornellBright.png)
+*Cornell box with brighter lighting. 2560 x 1440, 1024 samples*
+![Cornell Bright](ImageOutputFiles/BuddhaMetal.png)
+*Metals. 2560 x 1440, 1024 samples*
+
 ## TODO
 
 - Add Vulkan rendering path using Vulkan acceleration structures
 - Change from median split bvh to an SAH BVH construction
 - Normal maps
+- Volumetrics
 - Next event estimation]
 - Clean up main
 - Restructure shader pipeline to support spectral rendering
