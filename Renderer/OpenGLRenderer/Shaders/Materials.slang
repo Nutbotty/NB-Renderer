@@ -51,11 +51,17 @@ public Material loadMaterial(int index) {
     material.emissionStrength = gpuMaterial.emission.w;
     material.baseColorTexture = gpuMaterial.textureIndices.x;
     material.metallicRoughnessTexture = gpuMaterial.textureIndices.y;
+    material.emissiveTexture = gpuMaterial.textureIndices.w;
     return material;
 }
 
-public float3 emitted(Material material) {
-    return material.emission * material.emissionStrength;
+public float3 emitted(Material material, HitRecord rec) {
+     float3 emission = material.emission;
+        if (material.emissiveTexture >= 0) {
+            float3 texel = uEmissiveTextures.SampleLevel(float3(rec.uv, float(material.emissiveTexture)), 0.0f).rgb;
+                emission *= texel;
+        }
+        return emission * material.emissionStrength;
 }
 
 float3 toLocal(float3 v, float3 T, float3 B, float3 N) {

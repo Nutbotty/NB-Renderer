@@ -21,6 +21,7 @@ public struct Material {
 
     int baseColorTexture;
     int metallicRoughnessTexture;
+    int emissiveTexture;
 };
 
 public struct Ray {

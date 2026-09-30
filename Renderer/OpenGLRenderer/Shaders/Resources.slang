@@ -41,3 +41,5 @@ import GpuTypes;
 [[vk::binding(15, 0)]] public Sampler2DArray<float4> uMetalRoughTextures;
 
 [[vk::binding(16, 0)]] public ConstantBuffer<RenderConstants> gRender : register(b16, space0);
+
+[[vk::binding(17, 0)]] public Sampler2DArray uEmissiveTextures;

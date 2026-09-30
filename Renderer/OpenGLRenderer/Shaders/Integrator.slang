@@ -19,7 +19,7 @@ public float3 rayColor(Ray ray, inout uint rngState) {
             // normals test/debug, add variable later
             // return rec.normal * 0.5f + 0.5f;
             Material material = loadMaterial(rec.material);
-            radiance += throughput * emitted(material);
+            radiance += throughput * emitted(material, rec);
             Ray scattered;
             float3 attenuation;
             if (!scatterBsdf(currentRay, rec, material, attenuation, scattered, rngState)) {
