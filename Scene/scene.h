@@ -64,8 +64,10 @@ struct SceneMaterial {
 
     TextureId baseColorTexture = InvalidTextureId;
     TextureId metallicRoughnessTexture = InvalidTextureId;
+    TextureId emissiveTexture = InvalidTextureId;
     std::uint32_t baseColorTexCoord = 0;
     std::uint32_t metallicRoughnessTexCoord = 0;
+    std::uint32_t emissiveTexCoord = 0;
 
     glm::vec3 albedo{1.0f, 1.0f, 1.0f};
     float fuzz = 0.0f;

@@ -18,7 +18,7 @@
 #include <../stb_image.h>
 
 
-// This file was created with the assitance of generative AI and is not my own work
+// This file was created with the assitance of generative AI and is not considered my own work
 namespace
 {
 
@@ -342,7 +342,12 @@ namespace
                 material.metallicRoughnessTexture = ResolveTexture(asset, imageMap, texture.textureIndex);
                 material.metallicRoughnessTexCoord = static_cast<std::uint32_t>(texture.texCoordIndex);
             }
-            if (material.baseColorTexCoord != 0 || material.metallicRoughnessTexCoord != 0) {
+            if (gltfMaterial.emissiveTexture.has_value()) {
+                const auto& texture = *gltfMaterial.emissiveTexture;
+                material.emissiveTexture = ResolveTexture(asset, imageMap, texture.textureIndex);
+                material.emissiveTexCoord = static_cast<std::uint32_t>(texture.texCoordIndex);
+            }
+            if (material.baseColorTexCoord != 0 || material.metallicRoughnessTexCoord != 0 || material.emissiveTexCoord != 0) {
                 std::cerr << "Warning: only TEXCOORD_0 " "is currently supported\n";
             }
             const MaterialId materialId = scene.addMaterial(material);
