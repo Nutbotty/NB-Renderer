@@ -34,8 +34,12 @@ The vulkan implementation will make use of the KHR extensions.
 *Cornell box showing current lack of NEE. 3840 x 2160, 1024 samples*
 ![Cornell Bright](ImageOutputFiles/CornellBright.png)
 *Cornell box with brighter lighting. 2560 x 1440, 1024 samples*
-![Cornell Bright](ImageOutputFiles/BuddhaMetal.png)
+![Buddha](ImageOutputFiles/BuddhaMetal.png)
 *Metals. 2560 x 1440, 1024 samples*
+![Helmet](ImageOutputFiles/DamagedHelmet.png)
+*Metals. 3840 x 2560, 512 samples*
+![Bocchi](ImageOutputFiles/Bocchi.png)
+*Metals. 3840 x 2560, 512 samples*
 
 ## TODO
 
