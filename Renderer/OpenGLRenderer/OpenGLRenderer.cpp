@@ -31,6 +31,7 @@ namespace {
     constexpr GLint MetalRoughTextureUnit = 15;
     constexpr GLuint RenderConstantsBinding = 16;
     constexpr GLint EmissiveTextureUnit = 17;
+    constexpr GLint NormalTextureUnit = 18;
 
     constexpr GLsizei PbrTextureWidth = 1024;
     constexpr GLsizei PbrTextureHeight = 1024;
@@ -81,7 +82,7 @@ ResizeRgba8Nearest(const SceneTexture& texture, int targetWidth, int targetHeigh
         return layerMap[index];
     }
     std::vector<GpuMaterial> BuildGpuMaterials(const Scene& scene, const std::vector<int>& baseColorLayers,
-    const std::vector<int>& metalRoughLayers, const std::vector<int>& emissiveLayers) {
+    const std::vector<int>& metalRoughLayers, const std::vector<int>& normalLayers, const std::vector<int>& emissiveLayers) {
         std::vector<GpuMaterial> result;
         const auto& materials = scene.GetMaterials();
         result.reserve(materials.size());
@@ -89,19 +90,21 @@ ResizeRgba8Nearest(const SceneTexture& texture, int targetWidth, int targetHeigh
             GpuMaterial gpuMat{};
             gpuMat.BaseColor = material.baseColor;
             gpuMat.Surface = glm::vec4(material.metallic, material.roughness, material.indexOfRefraction, material.transmission);
+            gpuMat.Normal = glm::vec4(material.normalScale, 0.0f, 0.0f, 0.0f);
             gpuMat.Emission = glm::vec4(material.emission, material.emissionStrength);
             gpuMat.Metadata = glm::ivec4(static_cast<int>(material.type),0,0,0);
             gpuMat.TextureIndices = glm::ivec4(GetTextureLayer(material.baseColorTexture, baseColorLayers),
                 GetTextureLayer(material.metallicRoughnessTexture, metalRoughLayers),-1, -1);
             const int baseLayer = GetTextureLayer(material.baseColorTexture, baseColorLayers);
             const int mrLayer = GetTextureLayer(material.metallicRoughnessTexture, metalRoughLayers);
+            const int normalLayer = GetTextureLayer(material.normalTexture, normalLayers);
             const int emissiveLayer = GetTextureLayer(material.emissiveTexture, emissiveLayers);
             std::cerr << "Material " << result.size() << ": Scene base TextureId=" << (
                     material.baseColorTexture == InvalidTextureId ? -1 : static_cast<int>(material.baseColorTexture))
                 << " -> GPU base layer=" << baseLayer << ", Scene MR TextureId="<< (
                     material.metallicRoughnessTexture == InvalidTextureId ? -1 : static_cast<int>(material.metallicRoughnessTexture))
             << " -> GPU MR layer=" << mrLayer << '\n';
-            gpuMat.TextureIndices = glm::ivec4(baseLayer, mrLayer, emissiveLayer, emissiveLayer);
+            gpuMat.TextureIndices = glm::ivec4(baseLayer, mrLayer, normalLayer, emissiveLayer);
             std::cerr << "Material texture layers: base=" << gpuMat.TextureIndices.x << " mr=" << gpuMat.TextureIndices.y << '\n';
             result.push_back(gpuMat);
         }
@@ -157,7 +160,7 @@ void OpenGLRenderer::SetScene(const Scene& scene) {
 }
 
 void OpenGLRenderer::UploadScene(const Scene& scene) {
-    const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene, m_BaseColorLayerByTexture, m_MetalRoughLayerByTexture, m_EmissiveLayerByTexture);
+    const std::vector<GpuMaterial> gpuMaterials = BuildGpuMaterials(scene, m_BaseColorLayerByTexture, m_MetalRoughLayerByTexture, m_NormalLayerByTexture, m_EmissiveLayerByTexture);
     m_GpuScene = BvhBuilder::Build(scene, TlasLeafSize, BlasLeafSize);
     m_MaterialBuffer =CreateStorageBuffer(MaterialBufferBinding,
             gpuMaterials.data(), gpuMaterials.size() * sizeof(GpuMaterial));
@@ -197,7 +200,7 @@ void OpenGLRenderer::UploadEnvironment(const Scene& scene) {
 }
 
 void OpenGLRenderer::UpdateMaterials(const Scene& scene) {
-    const std::vector<GpuMaterial> materials = BuildGpuMaterials(scene, m_BaseColorLayerByTexture, m_MetalRoughLayerByTexture, m_EmissiveLayerByTexture);
+    const std::vector<GpuMaterial> materials = BuildGpuMaterials(scene, m_BaseColorLayerByTexture, m_MetalRoughLayerByTexture, m_NormalLayerByTexture, m_EmissiveLayerByTexture);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, m_MaterialBuffer);
     glBufferData(GL_SHADER_STORAGE_BUFFER, static_cast<GLsizeiptr>(materials.size() *
         sizeof(GpuMaterial) ), materials.data(), GL_DYNAMIC_DRAW);
@@ -251,9 +254,11 @@ void OpenGLRenderer::UploadMaterialTextures(const Scene& scene) {
     const auto& textures = scene.GetTextures();
     m_BaseColorLayerByTexture.assign(textures.size(), -1);
     m_MetalRoughLayerByTexture.assign(textures.size(), -1);
+    m_NormalLayerByTexture.assign(textures.size(), -1);
     m_EmissiveLayerByTexture.assign(textures.size(), -1);
     std::vector<TextureId> baseColorTextures;
     std::vector<TextureId> metalRoughTextures;
+    std::vector<TextureId> normalTextures;
     std::vector<TextureId> emissiveTextures;
 
     auto registerTexture = [&](TextureId textureId, std::vector<int>& layerMap, std::vector<TextureId>& layers) {
@@ -278,10 +283,12 @@ void OpenGLRenderer::UploadMaterialTextures(const Scene& scene) {
     for (const SceneMaterial& material : scene.GetMaterials()) {
         registerTexture(material.baseColorTexture, m_BaseColorLayerByTexture, baseColorTextures);
         registerTexture(material.metallicRoughnessTexture, m_MetalRoughLayerByTexture, metalRoughTextures);
+        registerTexture(material.normalTexture, m_NormalLayerByTexture, normalTextures);
         registerTexture(material.emissiveTexture, m_EmissiveLayerByTexture, emissiveTextures);
     }
     m_BaseColorTextureArray = CreatePbrTextureArray(scene, baseColorTextures, GL_SRGB8_ALPHA8);
     m_MetalRoughTextureArray = CreatePbrTextureArray(scene, metalRoughTextures, GL_RGBA8);
+    m_NormalTextureArray = CreatePbrTextureArray(scene, normalTextures, GL_RGBA8);
     m_EmissiveTextureArray = CreatePbrTextureArray(scene, emissiveTextures, GL_SRGB8_ALPHA8);
     std::cerr << "Uploaded PBR texture arrays:\n" << "  base color layers: " << baseColorTextures.size() << '\n'
         << "  metal/rough layers: " << metalRoughTextures.size() << '\n';
@@ -492,6 +499,8 @@ void OpenGLRenderer::DispatchCompute(const Scene& scene, const EditorCamera& cam
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_BaseColorTextureArray);
     glActiveTexture(GL_TEXTURE0 + MetalRoughTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_MetalRoughTextureArray);
+    glActiveTexture(GL_TEXTURE0 + NormalTextureUnit);
+    glBindTexture(GL_TEXTURE_2D_ARRAY, m_NormalTextureArray);
     glActiveTexture(GL_TEXTURE0 + EmissiveTextureUnit);
     glBindTexture(GL_TEXTURE_2D_ARRAY, m_EmissiveTextureArray);
     glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);

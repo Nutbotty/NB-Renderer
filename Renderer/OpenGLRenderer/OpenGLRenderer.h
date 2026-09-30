@@ -112,10 +112,12 @@ private:
     unsigned int m_EnvironmentTexture = 0;
     GLuint m_BaseColorTextureArray = 0;
     GLuint m_MetalRoughTextureArray = 0;
+    GLuint m_NormalTextureArray = 0;
     GLuint m_EmissiveTextureArray = 0;
     GLuint m_RenderConstantsBuffer = 0;
     std::vector<int> m_BaseColorLayerByTexture;
     std::vector<int> m_MetalRoughLayerByTexture;
+    std::vector<int> m_NormalLayerByTexture;
     std::vector<int> m_EmissiveLayerByTexture;
 
     BvhBuildResult m_GpuScene;
