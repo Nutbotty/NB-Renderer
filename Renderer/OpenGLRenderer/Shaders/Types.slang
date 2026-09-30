@@ -16,11 +16,13 @@ public struct Material {
     float refractionIndex;
     float transmission;
 
+    float normalScale;
     float3 emission;
     float emissionStrength;
 
     int baseColorTexture;
     int metallicRoughnessTexture;
+    int normalTexture;
     int emissiveTexture;
 };
 
@@ -44,6 +46,8 @@ public struct HitRecord {
     float t;
     float3 normal;
     float3 geometricNormal;
+    float3 tangent;
+    float tangentSign;
     float2 uv;
     bool frontFace;
     int material;

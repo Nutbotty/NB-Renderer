@@ -5,6 +5,7 @@ public struct PackedMaterial {
     float4 baseColor;
     // x = metallic/fuzz, y = roughness/fuzz fallback, z = IOR, w = transmission
     float4 surface;
+    float4 normal;
     float4 emission;
     int4 metadata;
     int4 textureIndices;

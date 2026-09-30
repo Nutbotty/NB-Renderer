@@ -17,6 +17,7 @@ public float3 rayColor(Ray ray, inout uint rngState) {
         HitRecord rec;
         if (hitWorld(currentRay, makeInterval(RAY_T_MIN, MAX_RAY_DISTANCE), rec)) {
             // normals test/debug, add variable later
+            // return normalize(rec.normal) * 0.5f + 0.5f;
             // return rec.normal * 0.5f + 0.5f;
             Material material = loadMaterial(rec.material);
             radiance += throughput * emitted(material, rec);

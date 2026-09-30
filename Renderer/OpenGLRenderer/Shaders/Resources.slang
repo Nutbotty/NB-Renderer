@@ -43,3 +43,5 @@ import GpuTypes;
 [[vk::binding(16, 0)]] public ConstantBuffer<RenderConstants> gRender : register(b16, space0);
 
 [[vk::binding(17, 0)]] public Sampler2DArray uEmissiveTextures;
+
+[[vk::binding(18, 0)]] public Sampler2DArray uNormalTextures;

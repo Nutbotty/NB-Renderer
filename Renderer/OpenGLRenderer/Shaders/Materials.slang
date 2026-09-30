@@ -47,10 +47,12 @@ public Material loadMaterial(int index) {
     material.roughness = gpuMaterial.surface.y;
     material.refractionIndex = gpuMaterial.surface.z;
     material.transmission = gpuMaterial.surface.w;
+    material.normalScale = gpuMaterial.normal.x;
     material.emission = gpuMaterial.emission.xyz;
     material.emissionStrength = gpuMaterial.emission.w;
     material.baseColorTexture = gpuMaterial.textureIndices.x;
     material.metallicRoughnessTexture = gpuMaterial.textureIndices.y;
+    material.normalTexture = gpuMaterial.textureIndices.z;
     material.emissiveTexture = gpuMaterial.textureIndices.w;
     return material;
 }
@@ -81,6 +83,35 @@ void buildBasis(float3 N, out float3 T, out float3 B) {
 float3 offsetRayOrigin(HitRecord rec, float3 direction) {
     float side = dot(direction, rec.geometricNormal) >= 0.0f ? 1.0f : -1.0f;
     return rec.p + rec.geometricNormal * side * RAY_EPSILON;
+}
+
+// from LearnOpenGL example more or less
+public float3 evaluateShadingNormal(Material material, HitRecord rec) {
+    float3 N = normalize(rec.normal);
+    if (material.normalTexture < 0) {
+        return N;
+    }
+    if (dot(rec.tangent, rec.tangent) <= EPSILON) {
+        return N;
+    }
+
+    float3 normalSample = uNormalTextures.SampleLevel(float3(rec.uv, float(material.normalTexture)), 0.0f).xyz;
+    normalSample = normalSample * 2.0f - 1.0f;
+    normalSample.xy *= material.normalScale;
+    if (dot(normalSample, normalSample) <= EPSILON) {
+        return N;
+    }
+    normalSample = normalize(normalSample);
+
+    //Gram-Schmidt tangent
+    float3 T = rec.tangent - N * dot(N, rec.tangent);
+    if (dot(T, T) <= EPSILON) {
+        return N;
+    }
+    T = normalize(T);
+    float3 B = cross(N, T) * rec.tangentSign;
+    float3 mappedNormal = T * normalSample.x + B * normalSample.y + N * normalSample.z;
+    return normalize(mappedNormal);
 }
 
 public float3 makeSafeShadingNormal(float3 shadingNormal, float3 geometricNormal, float3 V) {
@@ -595,7 +626,8 @@ public BxDFSample sampleBSDF(float3 N, float3 V, SurfaceData surface, inout uint
 public bool scatterBsdf(Ray rayIn, HitRecord rec, Material material, out float3 attenuation, out Ray scattered, inout uint rngState) {
     SurfaceData surface = evaluateSurface(material, rec);
     float3 V = normalize(-rayIn.direction);
-    float3 N = makeSafeShadingNormal(rec.normal, rec.geometricNormal, V);
+    float3 mappedNormal = evaluateShadingNormal(material, rec);
+    float3 N = makeSafeShadingNormal(mappedNormal, rec.geometricNormal, V);
     if (dot(N, V) <= EPSILON) {
         return false;
     }

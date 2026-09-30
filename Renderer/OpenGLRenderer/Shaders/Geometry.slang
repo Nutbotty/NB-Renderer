@@ -47,6 +47,8 @@ public bool hitSphere(Sphere sphere, Ray ray, Interval rayT, out HitRecord recor
     }
     record.t = root;
     record.p = rayAt(ray, record.t);
+    record.tangent = float3(0.0f);
+    record.tangentSign = 1.0f;
     float3 outwardNormal = (record.p - sphere.center) / sphere.radius;
     setSurfaceNormals(ray, outwardNormal, outwardNormal, record);
     record.material = sphere.material;
@@ -86,6 +88,8 @@ public bool hitQuad(int quadIndex, Ray ray, Interval rayT, out HitRecord record)
     record.p = intersection;
     record.material = quad.metadata.x;
     record.uv = float2(alpha, beta);
+    record.tangent = float3(0.0f);
+    record.tangentSign = 1.0f;
     setSurfaceNormals(ray, normal, normal, record);
     return true;
 }
@@ -120,6 +124,8 @@ public bool hitTri(int triIndex, Ray ray, Interval rayT, out HitRecord record) {
     }
     record.t = t;
     record.p = rayAt(ray, t);
+    record.tangent = float3(0.0f);
+    record.tangentSign = 1.0f;
     record.material = tri.metadata.x;
     record.uv = float2(u, v);
     setSurfaceNormals(ray, normal, normal, record);
@@ -131,6 +137,10 @@ public bool hitMeshTri(int triIndex, Ray ray, Interval rayT, out HitRecord recor
     int index0 = tri.metadata.x;
     int index1 = tri.metadata.y;
     int index2 = tri.metadata.z;
+    float4 tangent0 = meshVertexBuffer[index0].tangent;
+    float4 tangent1 = meshVertexBuffer[index1].tangent;
+    float4 tangent2 = meshVertexBuffer[index2].tangent;
+
     float3 a = meshVertexBuffer[index0].position.xyz;
     float3 b = meshVertexBuffer[index1].position.xyz;
     float3 c = meshVertexBuffer[index2].position.xyz;
@@ -158,13 +168,23 @@ public bool hitMeshTri(int triIndex, Ray ray, Interval rayT, out HitRecord recor
     }
     record.t = t;
     record.p = rayAt(ray, t);
-
     record.material = tri.metadata.w;
+
+
     float w = 1.0f - u - v;
+    float3 tangent = tangent0.xyz * w + tangent1.xyz * u + tangent2.xyz * v;
+    float tangentLengthSquared = dot(tangent, tangent);
+    if (tangentLengthSquared > EPSILON) {
+        tangent = normalize(tangent);
+    }
+    float tangentW = tangent0.w * w + tangent1.w * u + tangent2.w * v;
+    float tangentSign = tangentW < 0.0f ? -1.0f : 1.0f;
+    record.tangent = tangent;
+    record.tangentSign = tangentSign;
+
     float3 n0 = meshVertexBuffer[index0].normal.xyz;
     float3 n1 = meshVertexBuffer[index1].normal.xyz;
     float3 n2 = meshVertexBuffer[index2].normal.xyz;
-
     float3 geometricNormal = normalize(cross(edge1, edge2));
     float3 interpolatedNormal = w * n0 + u * n1 + v * n2;
     float3 shadingNormal = geometricNormal;
