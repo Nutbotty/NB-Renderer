@@ -324,6 +324,139 @@ namespace
         );
     }
 
+    bool GeneratePrimitiveTangents(
+    std::vector<SceneMeshVertex>& vertices,
+    std::uint32_t vertexOffset,
+    std::size_t vertexCount,
+    const std::vector<std::uint32_t>& indices)
+{
+    if (vertexCount == 0 || indices.empty()) {
+        return false;
+    }
+
+    std::vector<glm::vec3> tangentAccum(
+        vertexCount,
+        glm::vec3(0.0f));
+
+    std::vector<glm::vec3> bitangentAccum(
+        vertexCount,
+        glm::vec3(0.0f));
+
+    for (std::size_t i = 0; i < indices.size(); i += 3) {
+        const std::uint32_t i0 = indices[i + 0];
+        const std::uint32_t i1 = indices[i + 1];
+        const std::uint32_t i2 = indices[i + 2];
+
+        if (i0 >= vertexCount ||
+            i1 >= vertexCount ||
+            i2 >= vertexCount)
+        {
+            return false;
+        }
+
+        const SceneMeshVertex& v0 =
+            vertices[vertexOffset + i0];
+
+        const SceneMeshVertex& v1 =
+            vertices[vertexOffset + i1];
+
+        const SceneMeshVertex& v2 =
+            vertices[vertexOffset + i2];
+
+        const glm::vec3 edge1 =
+            v1.position - v0.position;
+
+        const glm::vec3 edge2 =
+            v2.position - v0.position;
+
+        const glm::vec2 deltaUv1 =
+            v1.texCoord - v0.texCoord;
+
+        const glm::vec2 deltaUv2 =
+            v2.texCoord - v0.texCoord;
+
+        const float determinant =
+            deltaUv1.x * deltaUv2.y -
+            deltaUv1.y * deltaUv2.x;
+
+        if (std::abs(determinant) < 1e-8f) {
+            continue;
+        }
+
+        const float inverseDeterminant =
+            1.0f / determinant;
+
+        const glm::vec3 tangent =
+            (
+                edge1 * deltaUv2.y -
+                edge2 * deltaUv1.y
+            ) * inverseDeterminant;
+
+        const glm::vec3 bitangent =
+            (
+                edge2 * deltaUv1.x -
+                edge1 * deltaUv2.x
+            ) * inverseDeterminant;
+
+        tangentAccum[i0] += tangent;
+        tangentAccum[i1] += tangent;
+        tangentAccum[i2] += tangent;
+
+        bitangentAccum[i0] += bitangent;
+        bitangentAccum[i1] += bitangent;
+        bitangentAccum[i2] += bitangent;
+    }
+
+    for (std::size_t i = 0; i < vertexCount; ++i) {
+        SceneMeshVertex& vertex =
+            vertices[vertexOffset + i];
+
+        glm::vec3 N =
+            glm::normalize(vertex.normal);
+
+        glm::vec3 T =
+            tangentAccum[i];
+
+        if (glm::dot(T, T) < 1e-12f) {
+            vertex.tangent =
+                glm::vec4(0.0f);
+
+            continue;
+        }
+
+        // Gram-Schmidt: make tangent orthogonal to normal.
+        T =
+            T -
+            N * glm::dot(N, T);
+
+        if (glm::dot(T, T) < 1e-12f) {
+            vertex.tangent =
+                glm::vec4(0.0f);
+
+            continue;
+        }
+
+        T = glm::normalize(T);
+
+        const glm::vec3 B =
+            bitangentAccum[i];
+
+        const float handedness =
+            glm::dot(
+                glm::cross(N, T),
+                B) < 0.0f
+                ? -1.0f
+                : 1.0f;
+
+        vertex.tangent =
+            glm::vec4(
+                T,
+                handedness);
+    }
+
+    return true;
+}
+
     std::vector<MaterialId> LoadMaterials(const fastgltf::Asset& asset, const std::vector<TextureId>& imageMap, Scene& scene) {
         std::vector<MaterialId> materialMap;
         materialMap.reserve(asset.materials.size());
@@ -683,6 +816,26 @@ namespace
             )
             {
                 return false;
+            }
+
+            bool tangentReady =
+    hasTangents;
+
+            if (!tangentReady &&
+                hasNormals &&
+                hasTexCoords)
+            {
+                tangentReady =
+                    GeneratePrimitiveTangents(
+                        vertices,
+                        vertexOffset,
+                        vertexCount,
+                        indices);
+
+                if (tangentReady) {
+                    std::cerr
+                        << "Generated tangents for glTF primitive\n";
+                }
             }
 
             if (indices.size() % 3 != 0)
