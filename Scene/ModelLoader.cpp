@@ -279,6 +279,39 @@ namespace
     }
 
 
+
+    bool LoadPrimitiveTangents(const fastgltf::Asset& asset, const fastgltf::Primitive& primitive,
+    std::vector<SceneMeshVertex>& vertices,std::uint32_t vertexOffset, std::size_t expectedCount) {
+        const auto* tangentAttribute =
+            primitive.findAttribute("TANGENT");
+
+        if (tangentAttribute == primitive.attributes.end()) {
+            return false;
+        }
+
+        const fastgltf::Accessor& accessor =
+            asset.accessors[
+                tangentAttribute->accessorIndex];
+
+        if (accessor.count != expectedCount) {
+            std::cerr
+                << "glTF tangent count does not match position count\n";
+
+            return false;
+        }
+
+        fastgltf::iterateAccessorWithIndex<glm::vec4>(asset, accessor,
+            [&](const glm::vec4& tangent, std::size_t index){
+                glm::vec3 direction = glm::vec3(tangent);
+                const float lengthSquared = glm::dot(direction, direction);
+                if (lengthSquared > 1e-12f) {
+                    direction =
+                        glm::normalize(direction);
+                }
+                vertices[vertexOffset + index].tangent = glm::vec4(direction, tangent.w < 0.0f ? -1.0f : 1.0f);
+            });
+        return true;
+    }
     MaterialId LoadDefaultMaterial(
         Scene& scene
     )
@@ -347,7 +380,13 @@ namespace
                 material.emissiveTexture = ResolveTexture(asset, imageMap, texture.textureIndex);
                 material.emissiveTexCoord = static_cast<std::uint32_t>(texture.texCoordIndex);
             }
-            if (material.baseColorTexCoord != 0 || material.metallicRoughnessTexCoord != 0 || material.emissiveTexCoord != 0) {
+            if (gltfMaterial.normalTexture.has_value()) {
+                const auto& texture = *gltfMaterial.normalTexture;
+                material.normalTexture = ResolveTexture(asset, imageMap, texture.textureIndex);
+                material.normalTexCoord = static_cast<std::uint32_t>(texture.texCoordIndex);
+                material.normalScale = static_cast<float>(texture.scale);
+            }
+            if (material.baseColorTexCoord != 0 || material.metallicRoughnessTexCoord != 0 || material.emissiveTexCoord != 0 || material.normalTexCoord != 0) {
                 std::cerr << "Warning: only TEXCOORD_0 " "is currently supported\n";
             }
             const MaterialId materialId = scene.addMaterial(material);
@@ -579,15 +618,8 @@ namespace
         return true;
     }
 
-    bool LoadMesh(
-        const fastgltf::Asset& asset,
-        const fastgltf::Mesh& gltfMesh,
-        const std::vector<MaterialId>& materialMap,
-        MaterialId defaultMaterial,
-        Scene& scene,
-        MeshId& outputMesh
-    )
-    {
+    bool LoadMesh(const fastgltf::Asset& asset, const fastgltf::Mesh& gltfMesh,
+        const std::vector<MaterialId>& materialMap, MaterialId defaultMaterial, Scene& scene, MeshId& outputMesh) {
         std::vector<SceneMeshVertex> vertices;
         std::vector<SceneMeshTriangle> triangles;
         std::vector<MaterialId> meshMaterials;
@@ -624,7 +656,7 @@ namespace
                     vertexOffset,
                     vertexCount
                 );
-
+            const bool hasTangents = LoadPrimitiveTangents(asset, primitive, vertices, vertexOffset, vertexCount);
             const bool hasTexCoords =
                 LoadPrimitiveTexCoords(
                     asset,
