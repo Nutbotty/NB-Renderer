@@ -27,6 +27,8 @@ struct alignas(16) GpuMaterial {
     glm::vec4 BaseColor{1.0};
     // x = metal y = rough z = ior w = transmission
     glm::vec4 Surface{0.0f};
+    // x = normalScale, yzw reserved
+    glm::vec4 Normal;
     // xyz =color, w = strength
     glm::vec4 Emission{0.0f};
     glm::ivec4 Metadata{0};
