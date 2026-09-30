@@ -610,6 +610,8 @@ void OpenGLRenderer::DestroySceneResources() {
         glDeleteTextures(1, &m_BaseColorTextureArray);
     if (m_MetalRoughTextureArray)
         glDeleteTextures(1, &m_MetalRoughTextureArray);
+    if (m_EmissiveTextureArray)
+        glDeleteTextures(1, &m_EmissiveTextureArray);
     m_MaterialBuffer = 0;
     m_SphereBuffer = 0;
     m_TlasBuffer = 0;
@@ -625,8 +627,10 @@ void OpenGLRenderer::DestroySceneResources() {
     m_EnvironmentTexture = 0;
     m_BaseColorTextureArray = 0;
     m_MetalRoughTextureArray = 0;
+    m_EmissiveTextureArray = 0;
     m_BaseColorLayerByTexture.clear();
     m_MetalRoughLayerByTexture.clear();
+    m_EmissiveLayerByTexture.clear();
     m_SceneUploaded = false;
 }
 
