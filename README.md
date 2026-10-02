@@ -1,6 +1,6 @@
 # NBPT
 
-A PBR GPU compute shader path tracing application written in C++ and Slang.
+An offline PBR path tracing application written in C++ and Slang GPU compute shaders.
 
 This project is a practical application of the modern offline rendering framework outlined by the PBRT textbook.
 It is written in  c++ and Slang, and can render using OpenGL or Vulkan. A DirectX 12 renderer is in development.
@@ -31,14 +31,15 @@ It is written in  c++ and Slang, and can render using OpenGL or Vulkan. A Direct
 |                   No Direct Light Sampling                    |                 With Direct Light Sampling                  |
 |:-------------------------------------------------------------:|:-----------------------------------------------------------:|
 | ![Before Image Description](ImageOutputFiles/64S_NEE_Off.png) | ![After Image Description](ImageOutputFiles/64S_NEE_On.png) |
-*Both images render at 1920 x 1080, 64 samples*
+
+*Both images rendered at 1920 x 1080, 64 samples*
 
 ![CornellDark](ImageOutputFiles/CornellDark.png)
 *Cornell box with no NEE. 3840 x 2160, 1024 samples*
 ![Cornell Bright](ImageOutputFiles/CornellBright.png)
 *Cornell box with brighter lighting. 2560 x 1440, 1024 samples*
 ![Helmet](ImageOutputFiles/DamagedHelmet.png)
-*Texture loading. 3840 x 2560, 512 samples*
+*Texture loading with normal and emmissive maps. 3840 x 2560, 512 samples*
 ![Buddha](ImageOutputFiles/BuddhaMetal.png)
 *Metals. 2560 x 1440, 1024 samples*
 ![Bocchi](ImageOutputFiles/Bocchi.png)
