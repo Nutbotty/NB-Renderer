@@ -72,6 +72,18 @@ public struct PackedTransform {
     float4x4 worldToObject;
 };
 
+// World-space emitter used for next event estimation.
+public struct PackedLight {
+    // tris: v0, quad: Q, sphere: center. w = worldspace area
+    float4 p0;
+    // tris: v1, quad: u, sphere: x = radius. w = selection probability
+    float4 p1;
+    // tris: v2, quad: v. w =CDF for light selection
+    float4 p2;
+    //x=light type, y=mat index, z=global mesh triaindex for UVs (-1 if none)
+    int4 metadata;
+};
+
 public struct RenderConstants {
     int uTlasNodeCount;
     int uSamplesPerDispatch;
@@ -79,8 +91,8 @@ public struct RenderConstants {
     uint uAccumulatedSamples;
     uint uUseHdri;
     float uEnvironmentIntensity;
-    float _padding0;
-    float _padding1;
+    int uLightCount;
+    uint uUseNee;
     float3 uCameraLookFrom;
     float uCameraVerticalFov;
     float3 uCameraLookAt;
