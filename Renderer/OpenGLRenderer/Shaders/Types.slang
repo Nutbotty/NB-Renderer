@@ -51,6 +51,10 @@ public struct HitRecord {
     float2 uv;
     bool frontFace;
     int material;
+    // index into primitiveRefBuffer, set by hitWorld
+    int primitiveRef;
+    // global mesh triangle index, -1 for non-mesh primitives
+    int meshTriangle;
 };
 
 public struct Interval {
